@@ -1,0 +1,173 @@
+---
+title: "Lab - Permutational tests - Functional Case"
+date: 2022/11/3
+author: "Nonparametric statistics ay 2022/2023"
+output:
+  
+  html_document: 
+    df_print: paged
+  pdf_document: default
+  html_notebook: 
+    df_print: paged
+  word_document: default
+editor_options: 
+  chunk_output_type: inline
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+library(rgl)
+knitr::opts_chunk$set(echo = TRUE)
+knitr::knit_hooks$set(webgl = hook_webgl)
+```
+
+```{css, echo=FALSE}
+.extracode {
+background-color: lightblue;
+}
+```
+
+## Nonparametric Statistics and Functional Data
+
+The Objective of this brief lab is to show you some applications of the advanced techniques you have seen during the course, applied to functional data. Namely we will see permutation testing (both global and local...), and prediction
+
+Let's load the packages we need and our data:
+
+```{r}
+library(fda)
+library(roahd)
+data=growth #data from the berkeley growth study...
+```
+
+And let's plot my curves...
+
+```{r}
+matplot(data$age,data$hgtm, type='l',col='blue')
+matlines(data$age,data$hgtf, type='l',col='red')
+```
+
+## Permutation Global Testing
+
+What if I want to test if the two curves are equal or not? Nothing simpler.. I just need to remember how permutation tests work...
+
+```{r}
+seed=2781991
+B=1000
+berkeley=rbind(t(data$hgtm),t(data$hgtf))
+n=nrow(berkeley)
+n_m=nrow(t(data$hgtm))
+n_f=nrow(t(data$hgtf))
+
+
+meandiff=(colMeans(t(data$hgtm))-colMeans(t(data$hgtf)))
+plot(meandiff,type = 'l')
+T0=sum(meandiff^2)
+T0
+```
+
+And, Knowing that under $H_0$ the two groups of curves are IID, my likelihood-invariant permutation scheme is of course label permutation, so...
+
+```{r}
+T0_perm=numeric(B)
+
+for(perm in 1:B){
+  permutation <- sample(n)
+  berkeley_perm=berkeley[permutation,]
+  perm_m = berkeley_perm[1:n_m,] 
+  perm_f = berkeley_perm[(n_m+1):n,] 
+  T0_perm[perm]=sum(((colMeans(perm_m)-colMeans(perm_f)))^2)
+}
+
+sum(T0_perm >= T0)/B
+hist(T0_perm,xlim = c(0,2000))
+abline(v=T0,col='green')
+
+```
+
+What would have happened instead, if I were to test inside a group?
+
+```{r}
+male1=berkeley[1:(n_m/2),]
+male2=berkeley[(n_m/2):n_m,]
+ber_m=rbind(male1,male2)
+
+T0=sum(((colMeans(male1)-colMeans(male2)))^2)
+T0
+
+T0_perm=numeric(B)
+
+for(perm in 1:B){
+  permutation <- sample(n_m)
+  berkeley_perm=ber_m[permutation,]
+  perm_m = berkeley_perm[1:(n_m/2),] 
+  perm_f = berkeley_perm[(n_m/2):n_m,] 
+  T0_perm[perm]=sum(((colMeans(perm_m)-colMeans(perm_f)))^2)
+}
+
+sum(T0_perm >= T0)/B
+hist(T0_perm)
+abline(v=T0,col='green')
+```
+
+Expectedly, I am not rejecting the null hypothesis (Pvalue of the test is very high...)
+
+
+Of course, I can think about using different test statistics
+To do so, though, I will need a slightly different technique to treat functional data, using the package roahd (which you should've seen in class with Dr. Cappozzo)
+
+
+
+```{r}
+hgtm_fd=fData(data$age,t(data$hgtm))
+hgtf_fd=fData(data$age,t(data$hgtf))
+
+meandiff=median_fData(hgtm_fd,type='MBD')-median_fData(hgtf_fd,type='MBD')
+plot(meandiff,type = 'l')
+T0=(sum(abs(meandiff$values)))
+T0
+```
+And now, the test
+
+```{r}
+berkeley_fd=append_fData(hgtm_fd,hgtf_fd)
+
+for(perm in 1:B){
+  permutation <- sample(n)
+  berkeley_perm=berkeley_fd[permutation,]
+  perm_m = berkeley_perm[1:n_m,] 
+  perm_f = berkeley_perm[(n_m+1):n,] 
+  meandiff=median_fData(perm_m,type='MBD')-median_fData(perm_f,type='MBD')
+  T0_perm[perm]=sum(abs(meandiff$values))
+}
+
+sum(T0_perm >= T0)/B
+hist(T0_perm,xlim = c(0,300))
+abline(v=T0,col='green')
+
+
+
+```
+
+
+Now, what I am doing here is basically is testing the hypothesis globally, I am rejecting if, for at least one time instant $t$ the two curves are statistically different.
+How do I tell what is that specific time instant? I use a procedure called Inteval-wise Testing
+
+Let's load the package
+
+```{r}
+#devtools::install_github("alessiapini/fdatest")
+library(fdatest)
+```
+
+And let's run the test: I will show just a 2 sample case, very simple and straightforward...
+
+```{r}
+
+tst=IWT2(t(data$hgtm),t(data$hgtf))
+plot(tst)
+
+```
+
+This technique allows you to perform a two sample t-test AND to impute a rejection of the null to some parts of the domain. (shadings represent significance values, dark grey is 1%, light is 5%).
+The philosophy is similar to the one of post-hoc tests, but instead of checking components, I am checking intervals of the domain of the functional datum

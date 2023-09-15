@@ -1,0 +1,880 @@
+---
+title: "Lab 13 - Survival analysis"
+date: 2022/11/18
+author: "Nonparametric statistics ay 2022/2023"
+output:
+  
+  html_document: 
+    df_print: paged
+  pdf_document: default
+  html_notebook: 
+    df_print: paged
+  word_document: default
+editor_options: 
+  chunk_output_type: console
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+library(rgl)
+knitr::opts_chunk$set(echo = TRUE)
+knitr::knit_hooks$set(webgl = hook_webgl)
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+```{css, echo=FALSE}
+.extracode {
+background-color: lightblue;
+}
+```
+
+## Loading necessary libraries
+
+```{r message=FALSE, warning=FALSE}
+library(survival)
+library(survminer)
+library(dplyr) 
+library(ggplot2)
+library(knitr)
+library(broom)
+library(tidyr)
+```
+
+## A Crash Course in Survival Analysis
+
+Survival analysis is a collection of statistical procedures for data
+analysis for which the outcome variable of interest is the survival
+time. `survival` is THE package to perform survival analysis in R, and
+the core functions we will use include:
+
+-   `Surv()`: creates a survival object.
+-   `survfit()`: fits a survival curve using a formula.
+-   `survdiff()`: Log-rank test for differences in survival between two
+    or more groups.
+-   `coxph()`: fits a Cox proportional hazard model.
+
+Today we will work with the lung dataset from the survival package: it
+is related to patients with advanced lung cancer from the North Central
+Cancer Treatment Group. Performance scores rate how well the patient can
+perform usual daily activities. It contains the following variables:
+
+-   inst: Institution code
+-   time: Survival time in days
+-   status: censoring status 1=censored, 2=dead
+-   age: Age in years
+-   sex: Male=1 Female=2
+-   ph.ecog: ECOG performance score (0=good 5=dead)
+-   ph.karno: Karnofsky performance score (bad=0-good=100) rated by
+    physician
+-   pat.karno: Karnofsky performance score as rated by patient
+-   meal.cal: Calories consumed at meals
+-   wt.loss: Weight loss in last six months
+
+```{r}
+lung$ID <- factor(seq(1:nrow(lung)))
+lung$status_fact <- factor(lung$status, labels = (c('Censor', 'Event')))
+lung_subs <- head(lung)
+
+ggplot(data=lung_subs,aes(x=ID,y=time)) + 
+  geom_bar(stat='identity',width=0.2) +
+  geom_point(aes(color=status_fact,shape=status_fact),size=6) +
+  coord_flip()
+```
+
+Let us investigate the survival probability for all the subjects, by
+gender and by age.
+
+## Survival Object
+
+The function `Surv(time, event)` of the survival package allows to
+create a survival object, usually used as a response variable in a model
+formula.
+
+```{r}
+head(Surv(lung$time, lung$status==2))
+```
+
+## Kaplan-Meier estimator for survival curve
+
+The Kaplan-Meier estimator of a survival curve can be computed using the
+`survfit` function:
+
+```{r}
+
+fit <- survfit(Surv(time, status==2) ~ 1, data = lung)
+
+```
+
+The function survfit() returns a list of variables including the
+following components:
+
+-   n: total number of subjects
+-   time: the event time points on the curve $(t=t^*_j)$
+-   n.risk: the number of subjects at risk at time t
+-   n.event: the number of events that occurred at time t
+-   n.censor: the number of censored subjects, who exit the risk set at
+    time t
+-   surv: the kaplan-meier estimator for survival S(t)
+-   std.err: the standard error for S(t)
+-   lower, upper: lower and upper confidence limits for the survival
+    curve S(t), respectively.
+-   cumhaz: the cumulative hazard curve H(t) = - log(S(t))
+-   std.chaz: the standard error for H(t)
+
+As usual it is edifying to try and hard code the quantities returned by
+a function: in this way you can truly validate whether you have
+understood the considered concepts. The following chunk of R code does
+so for the quantities returned by `survfit`: we will not comment it, but
+it could be useful for you to go through it (also for learning some
+data-wrangling principles based on the
+[tidyverse](https://www.tidyverse.org)).
+
+```{r, class.source="extracode"}
+df_KM <- lung %>% 
+  as_tibble() %>% 
+  select(time, status) %>% 
+  mutate(status=if_else(status==2,"death", "censored")) %>% 
+  arrange(time)
+
+df_KM_enriched <- df_KM %>% 
+  count(time,status,name = "n.event")
+
+
+n_risk_manual <- numeric(n_distinct(df_KM_enriched$time))
+n_censored_manual <- df_KM %>% 
+  group_by(time) %>% 
+  summarise(n_censored_manual=sum(status=="censored")) %>% 
+  pull(n_censored_manual)
+
+n_event_manual <- df_KM %>% 
+  group_by(time) %>% 
+  summarise(n_event_manual=sum(status=="death")) %>% 
+  pull(n_event_manual)
+
+n_risk_manual[1] <- nrow(df_KM)
+time_manual <- unique(df_KM_enriched$time)
+
+for(i in 2:length(n_risk_manual)){
+  previous_t <- df_KM_enriched %>% 
+    filter(time==time_manual[i-1])
+  n_death_previous_t <- pull(.data = filter(previous_t,status=="death"), n.event)
+  n_death_previous_t <- ifelse(length(n_death_previous_t)==0,0,n_death_previous_t)
+  n_censored_previous_t <- pull(.data = filter(previous_t,status=="censored"), n.event)
+  n_censored_previous_t <- ifelse(length(n_censored_previous_t)==0,0,n_censored_previous_t)
+  n_risk_manual[i] <- n_risk_manual[i-1]-n_death_previous_t-n_censored_previous_t
+}
+
+
+df_KM_fit <- distinct(df_KM, time) %>%
+  mutate(
+    n_risk = n_risk_manual,
+    n_censored = n_censored_manual,
+    n_event = n_event_manual,
+    h_est = (n_event ) / n_risk,
+    S_t = cumprod(1 - h_est), # or exp(-cumsum(h_est)) for Nelson-Aalen estimator
+    cumhaz=cumsum(h_est) # or -log(S_t)
+  )
+```
+
+The complete table for Kaplan-Meier estimator can be obtained as
+follows:
+
+```{r, eval=FALSE}
+summary(fit)
+```
+
+We make it pretty firstly by tidying the results with the broom package
+(very useful for a variety of models) and then passing it to the kable
+function from knitr
+
+```{r}
+kable(head(tidy(fit),20))
+```
+
+The median survival times represents the time at which the survival
+probability, S(t), is 0.5.
+
+```{r,warning=FALSE}
+surv_median(fit)
+```
+
+Or, manually
+
+```{r message=FALSE, warning=FALSE,class.source="extracode"}
+median_St<-fit$time[fit$surv<=0.5][1]
+median_St
+```
+
+### Kaplan-Meier plots
+
+To plot the KM estimator you can use the function plot
+
+```{r}
+plot(fit, conf.int = T, xlab='Time [days]', ylab = 'Survival Probability', col='red',
+     main="Kaplan-Meier Curve for Lung Cancer Survival")
+```
+
+For a better visualization we can use the `ggsurvplot()` function from
+the survminer package:
+
+```{r}
+ggsurvplot(fit,
+           risk.table = TRUE, # Add risk table
+           risk.table.col = "strata", # Change risk table color by groups
+           surv.median.line = "hv", # Specify median survival
+           ggtheme = theme_bw(), # Change ggplot2 theme
+           break.time.by=90,
+           title="Kaplan-Meier Curve for Lung Cancer Survival")
+```
+
+At time zero, the survival probability is 1.0 (or 100% of the
+participants are alive). At time 180 (after 6 months), the probability
+of survival is approximately 0.75 (or 75%). The median survival is
+approximately 310 days. After 540 days (1 year and a half), the survival
+probability is below 0.25 (25%).
+
+The cumulative incidence, or cumulative failure probability (CFP), shows
+the cumulative probabilities of experiencing the event of interest and
+it is computed as $$CFP(t) = P(T<t),$$ so it can be estimated as:
+$$1-S(t)$$
+
+```{r}
+cumulative_incidence <- 1 - fit$surv
+```
+
+We can visualize it using again the `ggsurvplot()` function specifying
+the option fun='event'
+
+```{r}
+ggsurvplot(fit,
+           risk.table = TRUE, # Add risk table
+           risk.table.col = "strata", # Change risk table color by groups
+           surv.median.line = "hv", # Specify median survival
+           ggtheme = theme_bw(), # Change ggplot2 theme
+           break.time.by=90,
+           fun='event',
+           title="Cumulative Incidence Curve for Lung Cancer Survival")
+```
+
+We may also want to plot the cumulative hazard; it is defined as
+$$H(t) = -log(S(t))$$ The cumulative hazard $H(t)$ can be interpreted as
+the cumulative force of mortality. In other words, it measures the total
+amount of risk that has been accumulated up to time $t$.
+
+The cumulative hazard is computed by the function `survfit()` using the
+Nelson-Aalen cumulative hazard rate estimator and it is given by:
+
+```{r}
+H <- fit$cumhaz
+```
+
+Again we can easily plot it:
+
+```{r}
+ggsurvplot(fit,
+           risk.table = TRUE, # Add risk table
+           ggtheme = theme_bw(), # Change ggplot2 theme
+           break.time.by=90,
+           fun='cumhaz',
+           title="Cumulative Hazard Curve for Lung Cancer Survival")
+```
+
+### Kaplan-Meier Curves between groups
+
+We want to consider now the gender groups and investigate if there is a
+difference in terms of survival among the two groups.
+
+```{r}
+fit.age <- survfit(Surv(time, status) ~ age, data=lung)
+ggsurvplot(fit.age, conf.int = F, risk.table.col = "strata", legend='none')
+```
+
+We cannot just do this, because we will get a separate curve for every
+unique value of age! We have to categorize data in some way.
+
+One thing we might do is to categorize a continuous variable into
+different groups (this clearly works much better for variables that are
+already categorical, more on this problem later). Let us start by
+plotting a histogram showing the distribution of age.
+
+```{r}
+hist(lung$age, xlab='Age [years]', main='Histogram of age in Lung Cancer Data')
+summary(lung$age)
+```
+
+Let us create a categorical variable with cut point at $70$ and
++Infinity (no upper limit), labeling as 'young' subjects with age less
+or equal than 70 and as 'old' subject aged more than 70.
+
+```{r}
+lung$agecat70 <- cut(lung$age, breaks=c(0, 70, Inf), labels=c("young", "old"))
+```
+
+What happens when we make a KM plot with this new categorization?
+
+```{r}
+fit.age <- survfit(Surv(time, status) ~ agecat70, data=lung)
+ggsurvplot(fit.age, conf.int = T,
+           risk.table = TRUE, # Add risk table
+           risk.table.col = "strata", # Change risk table color by groups
+           surv.median.line = "hv", # Specify median survival
+           ggtheme = theme_bw(), # Change ggplot2 theme
+           break.time.by=90,
+           legend.labs=c("Young (<= 70)","Old (> 70)"), legend.title="Age class",  
+           palette=c("darkblue","cyan3"), 
+           title="Kaplan-Meier Curves by age class for Lung Cancer Survival")
+```
+
+It looks like there's some differences in the curves between "old" and
+"young" patients, with older patients having slightly worse survival
+odds. Is there statistical evidence for that difference?
+
+```{r}
+log_rank_test <- survdiff(Surv(time, status) ~ agecat70, data=lung)
+log_rank_test
+```
+
+$p=0.03$, the difference in survival between those younger than 70 and
+older than 70 is significant. Again, with a little bit of data wrangling
+we can manually compute the required quantities for the log-rank test
+statistics:
+
+```{r message=FALSE, warning=FALSE, class.source="extracode"}
+fit_KM_by_agecut <- survfit(Surv(time, status) ~ agecat70, data=lung)
+tidy_km <- broom::tidy(fit_KM_by_agecut)
+
+log_rank_calculation_long <- tidy_km %>% 
+  select(time,strata,n.risk,n.event,n.censor) %>% 
+  complete(time, strata,fill = list(n.event=0,n.censor=0)) %>% 
+  group_by(strata) %>% 
+  fill(n.risk,.direction = "updown") %>% 
+  group_by(time, strata) %>% 
+  summarise(d_kj=sum(n.event), n_kj=sum(n.risk)) %>% 
+  ungroup() %>% 
+  add_count(time, wt = d_kj,name = "d_j") %>% 
+  add_count(time, wt = n_kj,name = "n_j") %>% 
+  group_by(time,strata) %>% 
+  summarise(e_kj=d_j*n_kj/n_j, d_kj=d_kj)
+  
+log_rank_manual <- log_rank_calculation_long %>% 
+  group_by(strata) %>% 
+  summarise(Observed=sum(d_kj), Expected=sum(e_kj)) %>% 
+  mutate(`(O-E)^2/E`=(Observed-Expected)^2/Expected)
+
+log_rank_manual
+```
+
+### Exercise
+
+Would we get the same results if we considered as cut point the median
+of age?
+
+## Hazard Ratio
+
+From the output of the log-rank test we can extract the number of
+observed and expected deaths in the groups of younger than 70 and older
+than 70:
+
+-   observed deaths in young: 127
+-   expected deaths in young: 137.3
+-   observed deaths in old: 38
+-   expected deaths in old: 27.7
+
+Therefore, the death hazard ratio of young vs old is:
+
+```{r}
+hazard_ratio <- (log_rank_test$obs[1]/log_rank_test$exp[1])/(log_rank_test$obs[2]/log_rank_test$exp[2])
+hazard_ratio
+```
+
+$HR = 0.674 < 1$ indicating that the risk of deaths in younger than 70
+years old is 0.674 times the risk in older than 70: being young is a
+protective factor.
+
+The log-rank test on the Kaplan-Meier plot can change depending on how
+you categorize your continuous variable. Indeed, with the log-rank test
+we are asking: "Are there differences in survival between those younger
+than 70 and those older than 70 years old?"
+
+If we want to investigate the effect of continuous age on survival,
+without depending on how we categorize the variable, we have to use a
+survival model, which analyzes the continuous variable over the whole
+range of its distribution. A survival regression model is asking: "What
+is the effect of the variable on survival?".
+
+### Exercise
+
+Build and comment Kaplan-Meier curves by gender and age.
+
+## Cox model
+
+The Cox proportional-hazards model (Cox, 1972) is essentially a
+regression model, commonly used in statistical medical research, for
+investigating the association between the survival time of patients and
+one or more predictor variables.
+
+In the previous section, we described the basic concepts of survival
+analyses and methods for analyzing and summarizing survival data,
+including:
+
+-   the definition of hazard and survival functions,
+-   the construction of Kaplan-Meier survival curves for different
+    patient groups
+-   the logrank test for comparing two or more survival curves
+
+The Kaplan-Meier curves and logrank tests are examples of univariate
+analysis. They describe the survival according to one factor under
+investigation, but they ignore the impact of any other predictor.
+Additionally, Kaplan-Meier curves and logrank tests are more useful when
+the predictor variable is categorical (e.g.: treatment A vs treatment B;
+males vs females). They do not work easily for quantitative predictors
+such as gene expression, weight, or age.
+
+An alternative method is the Cox proportional hazards regression
+analysis, which works for both quantitative predictor variables and for
+categorical variables. Furthermore, the Cox regression model extends
+survival analysis methods to assess simultaneously the effect of several
+risk factors on survival time.
+
+The function `coxph()` in the survival package can be used to compute
+the Cox proportional-hazards regression model in R.
+
+The simplified format is as follow:
+
+```{r, eval=FALSE}
+coxph(formula, data, method)
+```
+
+where
+
+-   formula: linear model with a survival object as the response
+    variable. Survival object is created using the function Surv(time,
+    event)
+-   data: a data frame containing the variables
+-   method: is used to specify how to handle ties (we would not deal
+    with this problem here)
+
+Let us consider the continuous variable age and fit a univariate Cox
+regression model
+
+```{r}
+cox.age <- coxph(Surv(time, status) ~ age, data = lung)
+cox.age
+```
+
+As usual, the function `summary()` produces a more complete report:
+
+```{r}
+summary(cox.age)
+```
+
+The Cox regression results can be interpreted as follows:
+
+1.  STATISTICAL SIGNIFICANCE The column marked "z" gives the Wald
+    statistic value. It corresponds to the ratio of each regression
+    coefficient to its standard error (z = coef/se(coef)). The wald
+    statistic evaluates whether the beta coefficient of a given variable
+    is statistically significantly different from 0. From the output
+    above, we can conclude that the variable age is statistically
+    significant at 5%.
+
+2.  THE REGRESSION COEFFICIENTS The second feature to note is the the
+    sign of the regression coefficients (coef). A positive sign means
+    that the hazard (risk of death) is higher, and thus the prognosis is
+    worse, for subjects with higher values of that variable. The beta
+    coefficient for age = 0.0187 indicates that younger patients have
+    lower risk of death (higher survival rates) than elder ones.
+
+3.  HAZARD RATIO & CONFIDENCE INTERVAL The exponentiated coefficients
+    (exp(coef) = exp(0.0187) = 1.019), also known as hazard ratios, give
+    the effect size of covariates. For example, the increase of 1 unit
+    (1 year) in the age increase the hazard of 1.9%. The summary output
+    also gives upper and lower 95% confidence intervals for the hazard
+    ratio (exp(coef)), lower 95% bound = 1.001, upper 95% bound = 1.037.
+    Being younger is associated with good prognostic. Similarly, the
+    increase of 10 units (10 years) in the age increase the hazard of a
+    factor exp(0.0187\*10)=1.2056, or 20.5%.
+
+4.  GLOBAL STATISTICAL SIGNIFICANCE OF THE MODEL Finally, the output
+    gives p-values for three alternative tests for overall significance
+    of the model: the likelihood-ratio test, the Wald test, and the
+    score logrank statistic. These three methods are asymptotically
+    equivalent. For large enough N, they will give similar results. For
+    small N, they may differ somewhat. The Likelihood ratio test has
+    better behavior for small sample sizes, so it is generally
+    preferred.
+
+### Visualizing the estimated distribution of survival times
+
+Having fitted a Cox model to the data, it's possible to visualize the
+predicted survival proportion at any given point in time for a
+particular risk group. The function survfit() estimates the survival
+proportion, by default at the mean values of covariates.
+
+Plot the baseline survival function S_0(t)
+
+```{r}
+plot(survfit(cox.age, data=lung), 
+     col="darkorange2", lwd=2, lty=1,
+     xlab='Time [days]', ylab='Survival Probability',
+     main='Baseline estimated survival probability')
+grid()
+```
+
+We may wish to display how estimated survival depends upon the value of
+the covariates of interest. For istance, we want to assess the impact of
+the age on the estimated survival probability. In this case, we
+construct a new data frame with $M$ rows, one for each different value
+of age we are interested in (usually 2 or 3).
+
+Suppose we want to consider ages equal to 50, 65 and 80. We create the
+new data:
+
+```{r}
+age_df <- with(lung,
+               data.frame(age = c(50,65,80) )
+)
+```
+
+This data frame is passed to survfit() via the newdata argument to
+estimate survival:
+
+```{r}
+fit.age <- survfit(cox.age, newdata = age_df)
+fit.age
+```
+
+```{r}
+plot(fit.age, conf.int=T,
+     col=c("dodgerblue2","navy","darkmagenta"), lwd=2, lty=1,
+     xlab='Time [days]', ylab='Survival Probability',
+     main='Adjusted Survival Probability Plot')
+grid()
+legend('topright', c("Age = 50", "Age = 65", "Age = 80"),
+       lty=c(1,1,1), lwd=c(2,2,2), col=c("dodgerblue2","navy","darkmagenta"))
+```
+
+## Multivariate Cox regression
+
+We want now to describe how different factors jointly impact on
+survival. To answer to this question, we will perform a multivariate Cox
+regression analysis with covariates age, sex, Karnofsky performance
+score rated by physician and weight loss. Check if you categorical
+covariates are considered factors:
+
+```{r}
+glimpse(lung)
+lung$sex <- ifelse(lung$sex==1,'Male','Female')
+lung$sex <- as.factor(lung$sex)
+```
+
+Fit the Cox's regression model:
+
+```{r}
+mod.cox <- coxph(Surv(time, status) ~ age + sex + ph.karno + wt.loss, data =  lung)
+summary(mod.cox)
+```
+
+The p-values for all three overall tests (likelihood, Wald, and score)
+are extremely small, indicating that the model is significant. These
+tests evaluate the omnibus null hypothesis that all of the $\beta$s are
+0. In the above example, the test statistics are in close agreement, and
+the omnibus null hypothesis is soundly rejected.
+
+In the multivariate Cox analysis, the covariates sex and ph.karno are
+significant (p \< 0.05). However, the covariates age and wt.loss fail to
+be significant.
+
+The HR for sex is exp(coef) = exp(0.514) = 1.67 with 95% CI = [1.19;
+2.35]. The hazard ratios of covariates are interpretable as
+multiplicative effects on the hazard. For example, holding the other
+covariates constant, being a male increases the hazard by a factor of
+1.67, or 67%. We conclude that, being male is associated with bad
+prognostic.
+
+The HR for ph.karno is exp(coef) = exp(-0.013) = 0.987 with 95% CI =
+[0.975;0.999], indicating a strong relationship between the ph.karno
+value and decreased risk of death. Holding the other covariates
+constant, a higher value of ph.karno is associated with a better
+survival.
+
+The hazard ratio HR of age is exp(coef) = 1.01, with a 95% CI =
+[0.996;1.035]. Because the confidence interval for HR includes 1, these
+results indicate that age makes a smaller contribution to the difference
+in the HR after adjusting for the other covariates.
+
+Similarly, the hazard ratio HR of wt.loss is exp(coef) = 0.998, with a
+95% CI = [0.985;1.010]. Because the confidence interval for HR includes
+1, these results indicate that wt.loss makes a smaller contribution to
+the difference in the HR after adjusting for the other covariates.
+
+### Visualizing Hazard ratios
+
+You can visualize Hr and its CIs using the `ggforest()` function of
+package survminer:
+
+```{r}
+ggforest(mod.cox, data=lung)
+```
+
+Plot the baseline survival function $S_0(t)$
+
+```{r}
+plot(survfit(mod.cox, data=lung), 
+     col="darkorange2", lwd=2, lty=1,
+     xlab='Time [days]', ylab='Survival Probability',
+     main='Baseline estimated survival probability')
+grid()
+```
+
+### Cox Model Assumptions and Goodness of fit
+
+When used inappropriately, statistical models may give rise to
+misleading conclusions. Therefore, it is important to check that a given
+model is an appropriate representation of the data.
+
+A first graphical option to check the goodness of fit is to check if the
+Martingale Residuals
+
+$$
+M_i=\delta_i-H(t_i, \mathbf{X}_i, \boldsymbol{\beta}), \quad n=1,\ldots,N
+$$
+
+with $\delta_i$ 0-1 function indicating whether the $i$-th unit has
+experienced the event (1 if present, 0 otherwise) and
+
+$$
+H(t_i, \mathbf{X}_i, \boldsymbol{\beta})=-\log \left[\hat{S}\left(t_i,\mathbf{X}_i, \boldsymbol{\beta} \right)\right]
+$$
+
+have $0$ mean along time. Recall that in a Cox model for each patient
+$i$ the corresponding survival function is estimated with $$
+\hat{S}\left(t ,\mathbf{X}_i, \boldsymbol{\beta}\right)=\left[\hat{S}_{0}(t)\right]^{\exp \left(\boldsymbol{X}_{i}^{T} \boldsymbol{\beta}\right)}
+$$
+
+where
+
+$$
+\hat{S_{0}}(t)=\prod_{j: t_{j}^{*}<t}\left(1-\frac{1}{\sum_{k \in R\left(t_{j}^{*}\right)} \exp \left(\boldsymbol{X}_{k}^{T} \hat{\boldsymbol{\beta}}\right)}\right)
+$$
+
+```{r}
+plot(predict(mod.cox), residuals(mod.cox, type='martingale'),
+     xlab='Fitted values', ylab='Martingale residuals', main='Residual Plot', las=1)
+# Add a line for residual=0
+abline(h=0, col='red')
+# Fit a smoother for the points
+lines(smooth.spline(predict(mod.cox), residuals(mod.cox, type='martingale')), col='blue')
+```
+
+Remember to check if you can manually compute the involved quantities:
+
+```{r, class.source="extracode"}
+cox_model_matrix <- model.matrix(mod.cox)
+centered_model_matrix <- sweep(cox_model_matrix,MARGIN = 2,STATS = mod.cox$means,FUN = "-")
+manual_linear_pred <- c(centered_model_matrix%*%mod.cox$coefficients)
+bese_haz_est <- basehaz(mod.cox)
+
+# Martingale residuals
+basehaz_for_i <- Vectorize(function(t){
+  pos_haz <- which(t<=bese_haz_est$time)[1]
+  bese_haz_est$hazard[pos_haz]
+})
+
+obs_NA <- which(is.na(lung$wt.loss))
+lung_no_NA <- lung[-obs_NA,]
+martingale_res_manual <- (lung_no_NA$status-1)- basehaz_for_i(t=lung_no_NA$time)*exp(manual_linear_pred)
+```
+
+Alternatively
+
+```{r}
+ggcoxdiagnostics(mod.cox, type = "martingale")
+```
+
+Sometimes, martingale residuals are difficult to be interpreted. The
+deviance residual is a normalized transform of the martingale residual:
+
+$$
+\hat{D}_{i}=\operatorname{sign}\left(M_{i}\right) \sqrt{-2\left[M_{i}+\delta_{i} \log \left(\delta_{i}-M_{i}\right)\right]} \quad i=1,\ldots,N
+$$
+
+These residuals should be roughly symmetrically distributed about zero
+with a standard deviation of 1.
+
+-   Positive values correspond to individuals that "died too soon"
+    compared to expected survival times.
+-   Negative values correspond to individual that "lived too long".
+-   Very large or small values are outliers, which are poorly predicted
+    by the model.
+
+It is also possible to check outliers by visualizing the deviance
+residuals. Example of deviance residuals:
+
+```{r}
+ggcoxdiagnostics(mod.cox, type = "deviance")
+```
+
+```{r, class.source="extracode"}
+deviance_res_manual <- sign(martingale_res_manual)*(-2*(martingale_res_manual+(lung_no_NA$status-1)*log((lung_no_NA$status-1)-martingale_res_manual)))^(1/2)
+```
+
+The pattern looks fairly symmetric around $0$
+
+A second graphical option could be to use the Schoenfeld residuals to
+examine model fit and detect outlying covariate values. Shoenfeld
+residuals represent the difference between the observed covariate and
+the expected given the risk set at that time. They should be flat,
+centered about zero. In principle, the Schoenfeld residuals are
+independent of time. A plot that shows a non-random pattern against time
+is evidence of violation of the PH assumption.
+
+```{r}
+ggcoxdiagnostics(mod.cox, type = "schoenfeld")
+```
+
+```{r, class.source="extracode"}
+df_4_schoenfeld <- lung %>%
+  tidyr::drop_na(age, sex, ph.karno, wt.loss) %>%
+  arrange(time)
+
+df_4_schoenfeld_sub <- df_4_schoenfeld %>%
+  select(age, sex, ph.karno, wt.loss) %>% 
+  mutate(sex=if_else(sex=="Male",1,0))
+
+cox_coef <- mod.cox$coefficients
+X_denom <- exp(data.matrix(df_4_schoenfeld_sub) %*% cox_coef)
+
+X_num <-
+  sweep(
+    x = df_4_schoenfeld_sub,
+    MARGIN = 1,
+    STATS = X_denom,
+    FUN = "*"
+  )
+
+X_bar <- matrix(nrow = nrow(X_num), ncol = ncol(X_num))
+X_den <- numeric(nrow(X_num))
+
+for(i in 1:nrow(X_num)){
+  time_instant <- df_4_schoenfeld$time[i]
+  risk_set <- which(time_instant<=df_4_schoenfeld$time)
+  X_bar[i,] <- colSums(X_num[risk_set,])
+  X_den[i] <- sum(X_denom[risk_set])
+}
+
+schoenfeld_calc <- df_4_schoenfeld_sub-sweep(X_bar,MARGIN = 1,STATS = X_den,FUN = "/")
+schoenfeld_manual <- schoenfeld_calc[df_4_schoenfeld$status==2,]
+```
+
+Another graphical method for checking proportional hazards is to plot
+$log(-log(KM(t)))$ vs. $t$ or $log(t)$ and look for parallelism. This
+can be done only for categorical covariates.
+
+We consider the KM estimators for sex variable:
+
+```{r}
+sex.km <- survfit(Surv(time, status) ~ sex, data = lung[!is.na(lung$wt.loss) & !is.na(lung$ph.karno),])
+```
+
+We plot $log(-log(KM(t)))$ using option `fun='cloglog'` in
+`plot.survfit()`
+
+```{r}
+plot(sex.km, fun='cloglog', 
+     col=c("deeppink2","dodgerblue2"), lwd=2, lty=1,
+     ylab="log(-log(Survival Probability))")
+grid()
+legend('topleft', c("Female", "Male"),
+       lty=c(1,1), lwd=c(2,2), col=c("deeppink2","dodgerblue2"))
+```
+
+Curves seem to be parallel -\> PH assumption seems to be satisfied for
+gender.
+
+The function `cox.zph()` in the survival package provides a convenient
+solution to test the proportional hazards assumption for each covariate
+included in a Cox regression model fit.
+
+For each covariate, the function cox.zph() correlates the corresponding
+set of scaled Schoenfeld residuals with time, to test for independence
+between residuals and time. Additionally, it performs a global test for
+the model as a whole.
+
+The proportional hazard assumption is supported by a non-significant
+relationship between residuals and time, and refused by a significant
+relationship.
+
+Test for PH using scaled Schoenfeld test for PH
+
+-   H0: Hazards are proportional
+-   H1: Hazards are NOT proportional
+
+cox.zph() return tests for each X and for the global model
+
+```{r}
+test.ph <- cox.zph(mod.cox)
+test.ph
+```
+
+From the output above, the global test is statistically significant.
+Therefore, we can not assume the proportional hazards. In particular,
+the test for ph.karno is highly significant.
+
+Plot the scaled schoenfeld residuals:
+
+```{r}
+par(mfrow=c(2,2))
+for(i in 1:4){
+  plot(test.ph[i])
+  abline(h=0, col='red')
+}
+```
+
+Alternatively
+
+```{r}
+ggcoxdiagnostics(mod.cox, type = "scaledsch")
+```
+
+So... What do we do? As a very basic primer on Survival Analysis we will
+not have time to thoroughly cover all possible solutions, we will
+(briefly) focus on stratification.
+
+## Stratified Cox Model
+
+Sometimes the proportional hazard assumption is violated for some
+covariate. In such cases, it is possible to stratify taking this
+variable into account and use the proportional hazards model in each
+stratum for the other covariates. We include in the model predictors
+that satisfy the proportional hazard assumption and remove from it the
+predictor that is stratified.
+
+Now, the subjects in the $k$-th stratum have an arbitrary baseline
+hazard function $h_{0k}(t)$ and the effect of other explanatory
+variables on the hazard function can be represented by a proportional
+hazards model in that stratum: $$h_{k}(t|X) = h_{0k}(t) \exp(\beta^TX)$$
+with $k=1,\ldots,K$ levels of the variable that is stratified.
+
+In the Stratified Proportional Hazards Model the regression coefficients
+are assumed to be the same for each stratum although the baseline hazard
+functions may be different and completely unrelated. The model may seem
+complex, but it is entirely straightforward in the likelihood framework,
+as we can simply combine likelihoods across strata (i.e., we multiply
+each strata-wise contribution). This is easily accomplished in R by
+using the `strata()` argument:
+
+```{r}
+mod.cox.strata <- coxph(Surv(time, status) ~ age + sex + strata(ph.karno) + wt.loss, data =  lung)
+summary(mod.cox.strata)
+```
+
+Test for PH assumption
+
+```{r}
+test.ph.strata <- cox.zph(mod.cox.strata)
+test.ph.strata
+```
+
+PH assumptions are satisfied for all variables and for the global model.

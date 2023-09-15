@@ -1,0 +1,108 @@
+---
+title: "Nonparametric Statistics Labs. Assembled!"
+output:
+    html_document:
+        toc: true
+        toc_float: true
+        number_sections: true
+    pdf_document:
+        toc: true
+        toc_depth: 3
+        number_section: true
+---
+<!-- Chunk options: https://rmarkdown.rstudio.com/lesson-3.html#:~:text=include%20%3D%20FALSE%20prevents%20code%20and,useful%20way%20to%20embed%20figures. -->
+
+```{r setup, include=FALSE}
+options(knitr.duplicate.label = "allow")
+path_images = paste(here::here("images"),"/", sep="")
+knitr::opts_chunk$set(fig.path = path_images,
+                      echo = TRUE,
+					  dev = "png",
+					  dpi = 300,
+					  cache = TRUE,
+					  warning = FALSE,
+					  message = FALSE)
+library(rgl)
+knitr::knit_hooks$set(webgl = hook_webgl)
+```
+
+# Depth measures
+
+```{r child=here::here("Block I - Nonparametric data exploration","NPS-lab01_depth_measures.Rmd")}
+```
+
+# Depth measures (functional)
+
+```{r child=here::here("Block I - Nonparametric data exploration","NPS-lab02_funct_depth_measures.Rmd")}
+```
+
+# Univariate tests
+
+```{r child=here::here("Block II - Nonparametric Inference","NPS-lab03_univariate_tests.Rmd")}
+```
+
+# Multivariate tests
+
+```{r child=here::here("Block II - Nonparametric Inference","NPS-lab04_multivariate_tests.Rmd")}
+```
+
+# Permutation tests (functional)
+
+```{r child=here::here("Block II - Nonparametric Inference","NPS-lab_Permutation_Functional.Rmd")}
+```
+
+# ANOVA
+
+```{r child=here::here("Block II - Nonparametric Inference","NPS-lab05_ANOVA.Rmd")}
+```
+
+# Permutational Testing in Regression
+
+```{r child=here::here("Block II - Nonparametric Inference","NPS-lab06_Regression.Rmd")}
+```
+
+# Permutational Confidence Interval
+
+```{r child=here::here("Block II - Nonparametric Inference","NPS-lab07_Confidence.Rmd")}
+```
+
+# Bootstrapping
+
+```{r child=here::here("Block II - Nonparametric Inference","NPS-lab08_Bootstrap.Rmd")}
+```
+
+# Bootstrap Tests and p-values
+
+```{r child=here::here("Block II - Nonparametric Inference","NPS-lab09_BootstrapCI.Rmd")}
+```
+
+# Polynomial and step regression
+
+```{r child=here::here("Block III - Nonparametric regression","NPS-lab10_polynomial_step_regression.Rmd")}
+```
+
+# Local regression and splines
+
+```{r child=here::here("Block III - Nonparametric regression","NPS-lab11_local_regression_splines.Rmd")}
+```
+
+# Generalized Additive Models (GAM)
+
+```{r child=here::here("Block III - Nonparametric regression","NPS-lab12_gam.Rmd")}
+```
+
+# Survival analysis
+
+```{r child=here::here("Block III - Nonparametric regression","NPS-lab13_surv_analysis.Rmd")}
+```
+
+# Scalar, Multivariate and Functional Conformal Prediction
+
+```{r child=here::here("Block IV - Nonparametric Prediction","NPS-lab14_Conformal.Rmd")}
+```
+
+# Robust Statistics
+
+```{r child=here::here("Block V - Robust statistics","NPS-lab16_Robust_statistics.Rmd")}
+```
+

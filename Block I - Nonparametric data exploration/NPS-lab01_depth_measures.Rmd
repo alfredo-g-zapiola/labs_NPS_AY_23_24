@@ -1,0 +1,439 @@
+---
+title: "Lab 01 - Depth measures"
+date: 2022/09/22
+author: "Nonparametric statistics ay 2022/2023"
+output:
+  
+  pdf_document: default
+  html_document: 
+    df_print: paged
+  html_notebook: 
+    df_print: paged
+  word_document: default
+editor_options: 
+  chunk_output_type: console
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+library(rgl)
+knitr::opts_chunk$set(echo = TRUE)
+knitr::knit_hooks$set(webgl = hook_webgl)
+```
+
+```{css, echo=FALSE}
+.extracode {
+background-color: lightblue;
+}
+```
+
+*Disclaimer 1: The present material is an adaptation of the original R
+script prepared by Dr. Matteo Fontana for the a.y. 2020/2021
+Nonparametric statistics course. While I acknowledge Matteo for the
+(great) work done I hereby assume responsibility for any error that may
+be present in this document.*
+
+*Disclaimer 2: I will start from the assumption that you are all
+intermediate R users, if this is not the case please let me know, and we
+shall find a solution together.*
+
+## Loading necessary libraries
+
+```{r message=FALSE, warning=FALSE}
+library(MASS)
+library(rgl)
+library(DepthProc)
+library(hexbin)
+library(aplpack)
+library(robustbase)
+```
+
+## Computing depths with R: some general ideas
+
+Let us start by simulating $500$ bivariate datapoints whose distribution
+is marginally exponential
+
+```{r}
+set.seed(2781991) # reproducibility
+n=500
+df_bivariate_exp = cbind(rexp(n), rexp(n))
+head(df_bivariate_exp)
+```
+
+and visualize their scatterplot
+
+```{r}
+plot(df_bivariate_exp[,1],df_bivariate_exp[,2], xlab="exp 1", ylab="exp 2")
+```
+
+We can further employ a hexagonal binning plot to visualize the data
+density
+
+```{r}
+bin=hexbin(df_bivariate_exp[,1],df_bivariate_exp[,2], xbins=10, xlab="exp 1", ylab="exp 2")
+plot(bin, main="Hexagonal Binning") 
+```
+
+Now on depths: there are many possible packages hosted on CRAN to work
+with depths in a multivariate setting. We will hereafter use
+`DepthProc`, which is a good general purpose package and in addition it
+has good plotting capabilities. Even though not all depth measures
+introduced in class are directly available (e.g., simplicial depth), it
+includes the two depth measures we will be using throughout this
+section, namely **Tukey** and **Mahalanobis** depths. Let us look at the
+help file for the `depth` function.
+
+Calculating depth for a given dataset is immediately accomplished by
+typing
+
+```{r}
+tukey_depth=depth(u=df_bivariate_exp,method='Tukey')
+```
+
+It may be useful (spoiler alert, it will become apparent why when Matteo
+will talk about nonparametric forecasting) to calculate the depth of a
+point relative to a sample. You can do it by:
+
+```{r}
+depth(u = c(0, 0), X = df_bivariate_exp, method = 'Tukey') 
+```
+
+Compute the median (deepest point) with `depthMedian` function
+
+```{r}
+depthMedian(df_bivariate_exp,depth_params = list(method='Tukey'))
+```
+
+Or, having already computed the Tukey depth for the entire sample:
+
+```{r}
+df_bivariate_exp[which.max(tukey_depth),]
+```
+
+If you have the luck of dealing with a bivariate dataset, you can easily
+visualize the depth surface in a very convenient way. `DepthProc` offers
+you two possible methods:
+
+```{r}
+depthContour(df_bivariate_exp,depth_params = list(method='Tukey'))
+```
+
+or
+
+```{r}
+depthPersp(df_bivariate_exp,depth_params = list(method='Tukey'))
+```
+
+For additional special effects:
+
+```{r, webgl=TRUE}
+depthPersp(df_bivariate_exp,depth_params = list(method='Tukey'),plot_method = 'rgl')
+```
+
+The very same analysis can be carried out by considering a different
+depth measure:
+
+```{r}
+maha_depth <- depth(df_bivariate_exp,method='Mahalanobis') 
+```
+
+This can be easily hard coded, recall the definition you have seen in
+class:
+
+$${M}_{h}D({F;X} ^ {n}) = \frac{ 1 }{ 1 + {{(x - \mu_F)} ^ {T}}{{\Sigma} ^ {-1}}(x - \mu_F) }$$
+
+```{r, class.source="extracode"}
+sample_mean <- colMeans(df_bivariate_exp)
+sample_S <- cov(df_bivariate_exp)
+
+maha_depth_manual <- 1/(1+mahalanobis(x = df_bivariate_exp,center = sample_mean,cov = sample_S))
+
+```
+
+And check that the obtained result is equal to the one obtained via the
+`depth` function
+
+```{r, class.source="extracode"}
+all(abs(maha_depth-maha_depth_manual)<1e-15) # food for thought: sqrt(2) ^ 2 == 2?
+```
+
+```{r}
+depthMedian(df_bivariate_exp,depth_params = list(method='Mahalanobis'))
+df_bivariate_exp[which.max(maha_depth_manual),]
+```
+
+And again the graphical outputs:
+
+```{r, webgl=TRUE}
+depthContour(df_bivariate_exp,depth_params = list(method='Mahalanobis'))
+depthPersp(df_bivariate_exp,depth_params = list(method='Mahalanobis'))
+depthPersp(df_bivariate_exp,depth_params = list(method='Mahalanobis'),plot_method = 'rgl')
+```
+
+Please note that anything that comes out of `depthContour` or
+`depthPersp` is NOT a density: we are not doing density estimation here,
+we are performing data exploration by means of a nonparametric
+procedure.
+
+### Exercise
+
+Try out the routines seen so far on something even more exotic:
+
+```{r}
+set.seed(1992)
+df_bivariate_cauchy = cbind(rcauchy(n,location=0,scale=.001), rcauchy(n,location = 0,scale=.001))
+head(df_bivariate_cauchy)
+```
+
+The Cauchy distribution is a distribution that has neither the first
+moment (the mean) nor the second moment (the variance). This means that
+the CLT does not apply.
+
+-   Can we still perform non-parametric data exploration with depth
+    measures?
+-   Would the Mahalanobis depth be a sensible measure to be used in this
+    context? Why not?
+
+## Multivariate outlier detection via depth measures
+
+In the previous Section we have computed depth measures for a given
+dataset and we have seen how to effectively plot them. This resulted in
+a convenient way to nonparametrically explore a (bivariate) dataset.
+Nevertheless, one of the main aims for a statistician to employ depth
+measures is to perform multivariate outlier detection. To appreciate
+this, let us simulate $100$ data points, of which $95\%$ comes from a
+multivariate normal with mean vector `mu_good` and covariance matrix
+`sigma_common` and the other 5% from another multivariate normal, which
+we assume is our outlier generator process.
+
+```{r}
+mu_good = c(0,0) 
+mu_outliers = c(7,7)
+
+sigma_common = matrix(c(1,.7,.7,1), ncol = 2)
+
+frac = .05
+n=100
+# sample points
+n_good=ceiling(n*(1-frac))
+n_outliers=n-n_good
+df_contaminated_normals = data.frame(rbind(
+  mvrnorm(n_good, mu_good, sigma_common),
+  mvrnorm(n_outliers, mu_outliers, sigma_common)
+))
+```
+
+Let us visualize the true nature of our dataset
+
+```{r}
+class <- c(rep(1,n_good),rep(2,n_outliers))
+plot(df_contaminated_normals,xlab="Norm 1", ylab="Norm 2",col=class)
+```
+
+We can clearly see those red points up there... how can we flag them in
+an automated fashion? The depth contour plot surely helps
+
+```{r}
+depthContour(
+  df_contaminated_normals,
+  depth_params = list(method = 'Tukey'),
+  points = TRUE,
+  colors = colorRampPalette(c('white', 'navy')),
+  levels = 10,
+  pdmedian = F,
+  graph_params = list(cex=.01, pch=1),
+  pmean = F
+)
+```
+
+But, as we have seen in class, a very handy graphical tool for spotting
+multivariate outliers is the bagplot. The `bagplot` function from the
+`aplpack` package can be used to display bagplots for bivariate data
+
+```{r}
+bagplot(df_contaminated_normals, factor = 3)
+```
+
+If we check the help page for the `bagplot` function, we see that we
+have a lot of room for customization:
+
+```{r}
+aplpack::bagplot(df_contaminated_normals,show.whiskers = F,main="Bagplot")
+aplpack::bagplot(df_contaminated_normals,show.loophull = F,main="Sunburst plot")
+```
+
+In addition, if we save the output of the bagplot to an object, we can
+automatically extract the outliers
+
+```{r}
+bagplot_cont_normals <- bagplot(df_contaminated_normals)
+outlying_obs <- bagplot_cont_normals$pxy.outlier
+```
+
+Once the outlying units have been identified, one can discard them from
+the original data and keep working on the clean subset only. There are
+several ways to do this.
+
+A more "sql-oriented" approach:
+
+```{r}
+df_clean_1 <-
+  dplyr::anti_join(
+    x = df_contaminated_normals,
+    y = outlying_obs,
+    by = c("X1" = "x", "X2" = "y"),
+    copy = TRUE
+  )
+```
+
+A more "object-oriented programming" approach:
+
+```{r}
+ind_outlying_obs <- which(apply(df_contaminated_normals,1,function(x) all(x %in% outlying_obs)))
+df_clean_2 <- df_contaminated_normals[-ind_outlying_obs,]
+```
+
+```{r}
+all.equal(df_clean_1,df_clean_2)
+```
+
+## Outlier detection in Star Cluster CYG OB1 data
+
+Data for the Hertzsprung-Russell Diagram of the Star Cluster CYG OB1,
+which contains $47$ stars in the direction of Cygnus, from C.Doom.
+
+-   The first variable is the logarithm of the effective temperature at
+    the surface of the star (Te)
+-   The second one is the logarithm of its light intensity (L/L0). The
+    Hertzsprung-Russell diagram is the scatterplot of these data points,
+    where the log temperature is plotted from left to right.
+
+```{r}
+data(starsCYG, package = "robustbase")
+names(starsCYG)
+plot(starsCYG, main="Star Cluster CYG OB1")
+```
+
+We can see two groups of points: the majority which tends to follow a
+steep band, the so called Main Sequence, and four stars in the
+upper-left corner. In astronomy the $43$ stars are said to lie on the
+Main sequence and the four remaining stars are the red giants, namely
+points with indexes 11, 20, 30 and 34. In details, the red giants are
+very bright, but they emit light with a very low color-temperature (and
+thus their surface temperature is still fairly low). We can easily
+isolate them thanks to the procedure seen so far. Let us look at the
+perspective plot of the depth surface
+
+```{r}
+depthContour(as.matrix(starsCYG), depth_params = list(method='Tukey'), points=TRUE)
+```
+
+As you can see, the sample mean is biased due to the presence of the 4
+red giants, whereas the Tukey Median is not. Let us compute it:
+
+```{r}
+depthMedian(starsCYG) 
+```
+
+As before, we can use the bagplot to visualize and flag the outlying
+data points.
+
+```{r}
+bagplot_starsCYG <- with(starsCYG,aplpack::bagplot(log.Te,log.light))
+red_giants <- bagplot_starsCYG$pxy.outlier
+ind_outlying_obs <- which(apply(starsCYG,1,function(x) all(x %in% red_giants)))
+ind_outlying_obs
+```
+
+## Moving beyond $R ^2$
+
+So far, we have only dealt with bivariate data. Even though the
+computational complexity escalates quickly when it comes to compute
+depth measures in $R ^d$, with $d>2$, we can still appreciate their
+usefulness in moderate dimension. Let us generate a trivariate dataset
+with contamination.
+
+```{r}
+mu_good = rep(0,3)
+mu_outliers = c(12,12,3)
+
+sigma_common = diag(3)*2
+
+frac = .1
+n=300
+# sample points
+n_good=ceiling(n*(1-frac))
+n_outliers=n-n_good
+df_3 = data.frame(rbind(
+  mvrnorm(n_good, mu_good, sigma_common),
+  mvrnorm(n_outliers, mu_outliers, sigma_common)
+))
+class <- c(rep(1,n_good),rep(2,n_outliers))
+pairs(df_3, col=class)
+```
+
+To visualize the outliers in this context we retort to a bagplot matrix:
+
+```{r}
+bagplot_matrix <- aplpack::bagplot.pairs(df_3)
+```
+
+You can notice that outlier detection becomes more difficult when the
+dimension increases, as
+
+-   some outliers may be wrongly flagged as genuine points
+-   some good points may be wrongly flagged as outliers
+
+These phenomena are respectively denoted as **masking** and
+**swamping**, we will cover it in details during the robust statistics
+module of this course!
+
+Let us conclude this lab session by looking at some DD-plots. For two
+probability distributions $F$ and $G$ , both in $R ^d$, and $D(\cdot)$
+an affine-invariant depth, we can define depth vs. depth plot being very
+useful generalization of the one dimensional quantile-quantile plot:
+
+$$
+D D(F, G)=\left\{\left(D_{F}(x), D_{G}(x)\right) \text { for all } x \in \mathbb{R}^{d}\right\}
+$$
+
+Its sample counterpart calculated for two samples
+$\mathbf{X} =\left\{X_1, \cdots, X_n \right\}$ from $F$, and
+$\mathbf{Y} =\left\{Y_1, \cdots, Y_m \right\}$ from $G$ is defined as
+
+$$
+D D\left(F_{n}, G_{m}\right)=\left\{\left(D_{F_{n}}(z), D_{G_{m}}(z)\right), z \in\{\mathbf{X} \cup \mathbf{Y}\}\right\}
+$$
+
+The `ddPlot` function automatically computes and plots it:
+
+```{r}
+df_good <- df_3[1:n_good,]
+df_out <- df_3[(n_good+1):n,]
+ddPlot(x = df_good,y = df_out,depth_params = list(method='Tukey'))
+```
+
+They would line up if they came from the same distribution
+
+It is easy to manually build a DD-plot
+
+```{r, class.source="extracode"}
+depth_good <- depth(u = df_3,X = df_good,method = "Tukey")
+depth_out <- depth(u = df_3,X = df_out,method = "Tukey")
+plot(depth_good,depth_out, col="blue", xlab="X depth", ylab="Y depth", main= "Depth vs. depth plot")
+grid(10, 10, col="grey50", lty=1)
+abline(0,1, col="grey50")
+```
+
+Clearly the distributions are not the same... What if we had some extra
+samples coming from $F$ (e.g., the trivariate normal centered at $0$)?
+
+```{r}
+n_extra <- 100
+df_extra <- data.frame(mvrnorm(n_extra, mu_good, sigma_common))
+ddPlot(x = df_extra, df_good,depth_params=list(method='Tukey'))
+```
+
+Indeed this time we can conclude the same distribution generated the
+data.

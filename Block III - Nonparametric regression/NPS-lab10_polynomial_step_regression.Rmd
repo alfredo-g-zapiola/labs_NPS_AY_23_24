@@ -1,0 +1,336 @@
+---
+title: "Lab 10 - Polynomial and step regression"
+date: 2022/10/28
+author: "Nonparametric statistics ay 2022/2023"
+output:
+  
+  html_document: 
+    df_print: paged
+  pdf_document: default
+  html_notebook: 
+    df_print: paged
+  word_document: default
+editor_options: 
+  chunk_output_type: console
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+library(rgl)
+knitr::opts_chunk$set(echo = TRUE)
+knitr::knit_hooks$set(webgl = hook_webgl)
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+```{css, echo=FALSE}
+.extracode {
+background-color: lightblue;
+}
+```
+
+## Loading necessary libraries
+
+```{r message=FALSE, warning=FALSE}
+library(ISLR2)
+library(car)
+```
+
+## Nonparametric Regression
+
+Let us familiarize with the dataset we will be using. It is something
+you should remember quite well: the Wage dataset by the amazing **An
+Introduction to Statistical Learning** book, since August 2021 at its
+second (and free!) edition available
+[here](https://www.statlearning.com). It contains wage and other data
+for a group of 3000 male workers in the Mid-Atlantic region. For the
+moment, let us focus on the Wage and age variables only.
+
+```{r}
+data(Wage)
+wage <- Wage$wage
+age <- Wage$age
+plot(age, wage)
+```
+
+We have a "weird" cluster of people with a VERY high wage and we observe
+some kind of reverse bathtub behavior. What happens if I try to model it
+linearly?
+
+```{r}
+m_linear=lm(wage ~ age)
+summary(m_linear)
+
+age.grid=seq(range(age)[1],range(age)[2],by=0.5)
+preds=predict(m_linear,list(age=age.grid),se=T)
+se.bands=cbind(preds$fit +2* preds$se.fit ,preds$fit -2* preds$se.fit)
+plot(age ,wage ,xlim=range(age.grid) ,cex =.5, col =" darkgrey ",main='Linear Fit')
+lines(age.grid,preds$fit ,lwd =2, col =" blue")
+matlines (age.grid ,se.bands ,lwd =1, col =" blue",lty =3)
+```
+
+As usual, we know how to hard code it...
+
+```{r, class.source="extracode"}
+
+X <- cbind(1,age)
+N <- nrow(X)
+beta_manual <- c(solve(crossprod(X), crossprod(X, wage)))
+res_manual <- c(X%*%beta_manual)-wage
+Cov_beta <- sum(res_manual^2)/(N-2)*solve(crossprod(X))
+X_grid <- cbind(1,age.grid)
+preds_manual_fit <- c(X_grid%*%beta_manual)
+preds_manual_fit_se <- sqrt(sapply(1:nrow(X_grid), function(i) t(X_grid[i,])%*%Cov_beta%*%X_grid[i,]))
+
+```
+
+Not very good eh?
+
+## Polynomial Regression
+
+The simplest way to extend linear regression to a nonlinear one is to
+employ polynomial functions. Let us try to add terms to the standard
+linear model:
+
+```{r}
+m_quad=lm(wage ~ age + I(age^2))
+summary(m_quad)
+preds=predict(m_quad,list(age=age.grid),se=T)
+se.bands=cbind(preds$fit +2* preds$se.fit ,preds$fit -2* preds$se.fit)
+plot(age ,wage ,xlim=range(age.grid) ,cex =.5, col =" darkgrey ",main='Quadratic Fit')
+lines(age.grid,preds$fit ,lwd =2, col =" blue")
+matlines (age.grid ,se.bands ,lwd =1, col =" blue",lty =3)
+```
+
+There is actually a more efficient way to do so (functional programming
+tip):
+
+```{r}
+m_list=lapply(1:10,function(degree){lm(wage ~ poly(age,degree=degree))})
+do.call(anova,m_list)
+```
+
+I would get the very same results with non-orthogonal polynomials
+
+```{r}
+m_list_raw=lapply(1:10,function(degree){lm(wage ~ poly(age,degree=degree,raw=T))})
+do.call(what = anova,args = m_list)
+```
+
+While the manual derivation of non-orthogonal polynomials is
+straightforward, orthogonal ones are defined as powers of our original
+predictor that are mutually orthogonal.
+
+```{r, class.source="extracode"}
+
+x <- Wage$age
+ort_poly <- poly(x,degree=2)
+
+# First manual orthogonal polynomial: x is centered and rescaled as to have unit length
+manual_poly_1 <- (x-mean(x))/sqrt(sum((x-mean(x))^2))
+all(abs(ort_poly[,1]-manual_poly_1)<1e16)
+
+# Second manual orthogonal polynomial: obtained regressing x^2 against the previous orthogonal polynomials,
+# rescaling the residuals to be a vector of unit length
+
+manual_poly_lm_2 <- lm(x^2~manual_poly_1)
+manual_poly_2 <- manual_poly_lm_2$residuals/sqrt(sum(manual_poly_lm_2$residuals^2))
+all(abs(ort_poly[,2]-manual_poly_2)<1e16)
+```
+
+And so on. In general, orthogonal polynomials are preferred in
+regression as the situation gets badly messed up if I try classic t-test
+based model selection:
+
+```{r}
+summary(m_list[[5]])
+summary(m_list[[4]])
+summary(m_list[[3]])
+```
+
+vs (look at the p-values)
+
+```{r}
+summary(m_list_raw[[5]])
+summary(m_list_raw[[4]])
+summary(m_list_raw[[3]])
+```
+
+All in all, the correct model seems to be a fourth degree polynomial.
+Let us look at some diagnostics:
+
+```{r}
+plot(m_list[[4]])
+```
+
+```{r, class.source="extracode", eval=FALSE}
+lm_4 <- m_list[[4]]
+N <- length(age)
+# 1
+plot(x=lm_4$fitted.values,y=lm_4$residuals)
+
+# 2
+plot(qnorm(ppoints(n = N)),sort(rstandard(lm_4)))
+abline(a = 0,b = 1,col="red")
+
+# 3
+plot(lm_4$fitted.values,sqrt(abs(rstandard(lm_4))))
+
+# 4
+#XX <- model.matrix(lm_4)
+#diag(XX%*%solve(t(XX)%*%XX)%*%t(XX)))
+plot(hatvalues(lm_4),sqrt(abs(rstandard(lm_4))))
+```
+
+Still some of the upper points are not well captured by the model, let
+us try to make predictions
+
+```{r}
+preds=predict(m_list[[4]],list(age=age.grid),se=T)
+se.bands=cbind(preds$fit +2* preds$se.fit ,preds$fit -2* preds$se.fit)
+plot(age ,wage ,xlim=range(age.grid) ,cex =.5, col =" darkgrey ",main='Degree 4 Poly - Fit')
+lines(age.grid,preds$fit ,lwd =2, col =" blue")
+matlines (age.grid ,se.bands ,lwd =1, col =" blue",lty =3)
+```
+
+What happens, instead, if I try to overfit?
+
+```{r}
+preds=predict(m_list[[10]],list(age=age.grid),se=T)
+se.bands=cbind(preds$fit +2* preds$se.fit ,preds$fit -2* preds$se.fit)
+plot(age ,wage ,xlim=range(age.grid) ,cex =.5, col =" darkgrey ",main='Degree 10 Poly - Fit')
+lines(age.grid,preds$fit ,lwd =2, col =" blue")
+matlines (age.grid ,se.bands ,lwd =1, col =" blue",lty =3)
+```
+
+Notice that polynomial regression can be directly applied to GLMs:
+consider the following logistic regression models
+
+```{r}
+m_list_logit=lapply(1:5,function(degree){glm(I(wage>250) ~ poly(age,degree=degree),family='binomial')})
+do.call(what = anova, c(list(test="Chisq"), m_list_logit))
+```
+
+A smaller model here may suffice
+
+```{r}
+preds=predict(m_list_logit[[4]],list(age=age.grid),se=T)
+pfit=exp(preds$fit )/(1+ exp( preds$fit )) 
+se.bands.logit = cbind(preds$fit +2* preds$se.fit , preds$fit -2*
+                         preds$se.fit)
+se.bands = exp(se.bands.logit)/(1+ exp(se.bands.logit))
+plot(age ,I(wage >250) ,xlim=range(age.grid) ,type ="n",ylim=c(0 ,.2) )
+points (jitter (age), I((wage >250) /5) ,cex =.5, pch ="|",
+          col =" darkgrey ", main='Poly 4 Fit - Logistic')
+lines(age.grid ,pfit ,lwd =2, col =" blue")
+matlines (age.grid ,se.bands ,lwd =1, col =" blue",lty =3)
+```
+
+### Exercise
+
+Considering the prestige and income variables from the Prestige of
+Canadian Occupations dataset, build polynomial regression models to
+explain prestige as a (non-linear) function of income
+
+```{r}
+with(Prestige,plot(income,prestige))
+```
+
+-   Is a linear function sufficient to model the relationship between
+    the two variables?
+-   Which degree is sufficient to consider for modeling the
+    relationship?
+
+## Step regression
+
+Using polynomial functions of the features as predictors in a linear
+model imposes a global structure on the non-linear function of X. We can
+instead use step regression in order to avoid imposing such a global
+structure. The idea is to break the range of X into bins, and fit a
+different constant in each bin. This amounts to converting a continuous
+variable into an ordered categorical variable. Notice that, same as for
+polynomials regression, the fitting procedure remains exactly equal to
+the one used for linear models: we are still always using OLS here! Let
+us keep working with the Prestige dataset and split the feature space X
+in two bins. Ah, in case you have not noticed during the exercise, a
+linear model is too restrictive here:
+
+```{r}
+with(Prestige,plot(income,prestige))
+abline(lm(prestige~income, data=Prestige))
+```
+
+Cutpoint maybe around $10000$? How do we do that?
+
+```{r}
+head(Prestige$income)
+head(with(Prestige, cut(income,breaks = c(min(income),10000,max(income)))))
+```
+
+Then it boils down to fit an lm with this new variable
+
+```{r}
+m_cut=lm(prestige ~ cut(income,breaks = c(-Inf,10000,max(income))), data=Prestige)
+broom::tidy(summary(m_cut)) %>% 
+  dplyr::mutate(term=ifelse(term=="(Intercept)",term, "income_cut(1e+04,2.59e+04]")) # all this mess to have a nice name on the summary table
+
+```
+
+```{r}
+income.grid=with(Prestige, seq(range(income)[1],range(income)[2],by=10))
+preds=predict(m_cut,list(income=income.grid),se=T)
+se.bands=cbind(preds$fit +2* preds$se.fit ,preds$fit -2* preds$se.fit)
+with(Prestige, plot(income ,prestige ,xlim=range(income.grid) ,cex =.5, col =" darkgrey ",main='Custom cut Fit'))
+lines(income.grid,preds$fit ,lwd =2, col =" blue")
+matlines(income.grid ,se.bands ,lwd =1, col =" blue",lty =3)
+```
+
+Of course we can be even more flexible
+
+```{r}
+m_cut=lm(prestige ~ cut(income,breaks=4),data = Prestige)
+```
+
+```{r}
+income.grid=with(Prestige, seq(range(income)[1],range(income)[2],by=10))
+preds=predict(m_cut,list(income=income.grid),se=T)
+se.bands=cbind(preds$fit +2* preds$se.fit ,preds$fit -2* preds$se.fit)
+with(Prestige, plot(income ,prestige ,xlim=range(income.grid) ,cex =.5, col =" darkgrey ",main='Custom cut Fit'))
+lines(income.grid,preds$fit ,lwd =2, col =" blue")
+matlines(income.grid ,se.bands ,lwd =1, col =" blue",lty =3)
+```
+
+Or we may want to have uneven bins
+
+```{r}
+uneven_breaks <- c(seq(0,10000,by=1000),seq(15000,35000,by=10000))
+```
+
+```{r}
+m_cut=lm(prestige ~ cut(income,breaks=uneven_breaks),data = Prestige)
+```
+
+```{r}
+income.grid=with(Prestige, seq(range(income)[1],range(income)[2],by=10))
+preds=predict(m_cut,list(income=income.grid),se=T)
+se.bands=cbind(preds$fit +2* preds$se.fit ,preds$fit -2* preds$se.fit)
+with(Prestige, plot(income ,prestige ,xlim=range(income.grid) ,cex =.5, col =" darkgrey ",main='Custom cut Fit'))
+lines(income.grid,preds$fit ,lwd =2, col =" blue")
+matlines(income.grid ,se.bands ,lwd =1, col =" blue",lty =3)
+abline(v=uneven_breaks,lty=2)
+```
+
+```{r}
+summary(m_cut)
+```
+
+### Exercise
+
+Are you able to provide a step regression model with an $R^2>0.8$? What
+do you think? Is it a good model? Can it be used to make predictions?
+
+```{r, echo=FALSE, eval=FALSE}
+uneven_breaks_2 <- c(seq(0,10000,by=100),seq(15000,35000,by=10000))
+m_cut2=lm(prestige ~ cut(income,breaks=uneven_breaks_2),data = Prestige)
+summary(m_cut2)
+```

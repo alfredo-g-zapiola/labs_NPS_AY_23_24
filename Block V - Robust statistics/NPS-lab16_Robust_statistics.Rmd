@@ -1,0 +1,395 @@
+---
+title: "Lab 16 - Robust Statistics"
+date: 2022/12/06
+author: "Nonparametric statistics ay 2022/2023"
+output:
+  
+  html_document: 
+    df_print: paged
+  pdf_document: default
+  html_notebook: 
+    df_print: paged
+  word_document: default
+editor_options: 
+  chunk_output_type: console
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+library(rgl)
+knitr::opts_chunk$set(echo = TRUE)
+knitr::knit_hooks$set(webgl = hook_webgl)
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+```{css, echo=FALSE}
+.extracode {
+background-color: lightblue;
+}
+```
+
+## Loading necessary libraries
+
+```{r message=FALSE, warning=FALSE}
+library(robustbase)
+library(psych)
+library(MASS)
+library(ellipse)
+library(here)
+library(DescTools)
+library(knitr)
+library(RobStatTM)
+```
+
+## Robust univariate
+
+### Explicit robust estimators
+
+Following the definitions outlined during the very first class of the
+module, explicit robust estimators are readily available in R. There is
+not very much to say about it here, let us only try to recreate the
+table presented in slide 18 of the *Introduction and explicit robust
+estimators* section.
+
+```{r}
+x <-
+  c(9.52, 9.68, 10.16, 9.96, 10.08, 9.99, 10.47, 9.91, 9.92, 15.21)
+
+x_9 <- x[-10]
+
+est_names <- c(
+  "$\\bar{x}$ ",
+  "$\\bar{x}_{0.1}$ ",
+  "$\\tilde{x}_{0.1}$",
+  "$Me(x)$",
+  "$\\hat{\\sigma}$",
+  "$MD(x)$",
+  "$MAD(x)$",
+  "$MADN(x)$",
+  "$IQR(x)$"
+)
+
+explicit_est_x_9 <- c(mean(x_9),
+    mean(x_9, trim = .1),
+    psych::winsor.mean(x = x_9, trim = .1),
+    median(x_9),
+    sd(x_9),
+    DescTools::MeanAD(x_9),
+    mad(x_9,constant = 1),
+    mad(x_9), # MADN
+    IQR(x_9))
+
+explicit_est_x <- c(mean(x),
+  mean(x, trim = .1),
+  psych::winsor.mean(x = x, trim = .1),
+  median(x),
+  sd(x),
+  DescTools::MeanAD(x),
+  mad(x,constant = 1),
+  mad(x),
+  IQR(x)
+  )
+
+kable(
+  data.frame(est_names, explicit_est_x_9, explicit_est_x),
+  digits = c(0, 3, 3),
+  escape = FALSE
+)
+```
+
+### Implicit robust estimators
+
+Univariate M-estimators can efficiently be created by means of the
+`robustbase` R package. It offers plenty of features (we will see some
+more further on in the lab) to customize your M-estimator, by even
+letting you define your own `psiFunc`, for constructing `psi_func`
+objects. We are not dwelling into the details about it, but if you are
+curious you can look up at the vignette available
+[online](https://cran.r-project.org/web/packages/robustbase/vignettes/psi_functions.pdf).
+Let us stick with the two we have encountered in class, namely Huber and
+Tukey's. They can easily be plotted by means of:
+
+```{r}
+source(system.file("xtraR/plot-psiFun.R", package = "robustbase", mustWork=TRUE))
+p.psiFun(seq(-3,3,length.out=100), "huber", par = 1.5, leg.loc="bottomright", main="T")
+p.psiFun(seq(-5,5,length.out=100), "biweight", par = 1.5, leg.loc="bottomright",main="T")
+```
+
+We have already seen how to hard-code the iterative algorithm described
+in slide 13, but with an additional (robust) scale estimate
+$\hat{\sigma}$.
+
+```{r}
+manual_M_location <-
+  function(x,
+           k,
+           type = c("Huber", "Tukey"),
+           tol = sqrt(.Machine$double.eps),
+           itermax = 1000) {
+    
+    
+    mu <- mu_old <- median(x) # initial value
+    rob_scale <- mad(x) # it will be kept fixed
+    crit <- TRUE
+    iter <- 0
+    
+    weigth_f <- switch (type,
+                        "Huber" = function(x) pmin(1, k/abs(x)),
+                        "Tukey" = function(x) ((1-(x/k)^2)^2)*(abs(x)<=k)
+    )
+    
+    while(crit){
+      w_i <- weigth_f((x-mu)/rob_scale)
+      mu <- weighted.mean(x = x,w = w_i)
+      err <- abs(mu-mu_old)
+      
+      mu_old <- mu
+      iter <- iter+1
+      
+      crit <- (err > tol & iter < itermax)
+    }
+    list(mu=mu, s=rob_scale,it=iter)
+  }
+```
+
+The `robustbase` package contains the `huberM` function for performing
+M-Estimation of location with MAD scale by means of Huber function
+
+```{r}
+huberM(x = x,k = 1.5)
+manual_M_location(x = x,k = 1.5,type = "Huber")
+```
+
+In order to employ other $\psi$-functions, as well as other estimator
+types (S, MM, not covered in class), the `nlrob` is a very flexible
+function for robust fitting. Honestly, I do not find it straightforward
+to use, so we move directly to robust multivariate estimators.
+
+## Robust multivariate
+
+### A simple example
+
+We consider a data frame with average brain and body weights for $62$
+species of land mammals and three other animal types.
+
+```{r}
+data("Animals2")
+# let us work with the natural logarithms of the weigths
+Animals2$body <- log(Animals2$body)
+Animals2$brain <- log(Animals2$brain)
+plot(Animals2)
+```
+
+Does it look familiar? We have already seen a plot of these data during
+the class. The aim is to derive robust location and scale estimators
+employing the Minimum Covariance Determinant (MCD). There are several
+ways of doing it in `R`, with different routines available. We make use
+of the `robustbase` package, that contains the "Essential" Robust
+Statistics tools allowing to analyze data with robust methods.
+
+The needed function is `covMcd`, whose main arguments are:
+
+-   `x`: a matrix of data points
+-   `alpha`: numeric parameter controlling the size of the subsets over
+    which the determinant is minimized; roughly `alpha*N`
+-   `nsamp`: number of subsets used for initial estimates or a character
+    vector specifying whether "best", "exact", or "deterministic"
+    estimation should be performed
+
+Clearly, the most important hyper-parameter to be selected is `alpha`,
+as it approximately determines the size of the subsets used for
+parameter estimation, and the consequent BP of the estimator. Let us set
+`alpha=0.75`.
+
+```{r}
+fit_MCD <- covMcd(x = Animals2, alpha = .75, nsamp = "best")
+fit_MCD
+```
+
+The `fit_MCD` object contains the raw and reweighted estimates of
+location and scatter, the resulting robust Mahalanobis distances and the
+best subset used for computing the raw estimates.
+
+```{r}
+ind_best_subset <- fit_MCD$best
+N <- nrow(Animals2)
+p <- ncol(Animals2)
+plot(Animals2, col=ifelse(1:N%in%ind_best_subset,"black","red"),pch=19)
+```
+
+Notice that the raw MCD estimate of scatter is by default multiplied by
+a consistency factor
+
+$$
+c(p, \alpha)=\frac{\alpha}{F_{\chi_{p+2}^{2}}\left(q_{p, \alpha}\right)}
+$$ ($q_{p, \alpha}$ is the $\alpha$ level quantile of a $\chi^2_p$
+distribution) and a finite sample correction factor, to make it
+consistent at the normal model and unbiased at small samples.
+
+```{r}
+dplyr::near(fit_MCD$raw.center,colMeans(Animals2[ind_best_subset,]))
+dplyr::near(fit_MCD$raw.cov,cov(Animals2[ind_best_subset,])*prod(fit_MCD$raw.cnp2))
+h <- fit_MCD$quan
+dplyr::near(fit_MCD$raw.cnp2[1],(h/N)/pchisq(qchisq(p = h/N,df = p),df = p+2))
+```
+
+Notice that by default, unless specifying`raw.only=TRUE`, `covMcd`
+performs a reweighting step for improving the efficiency of the final
+estimator. In details, the new weights are computed as follows:
+
+$$
+W\left(d^{2}\right)=I\left(d^{2} \leqslant \chi_{p, 0.975}^{2}\right)
+$$ where $d^2$ is the squared Mahalanobis distance based on the scaled
+raw MCD.
+
+```{r}
+ind_rew_obs <-
+  which(
+    mahalanobis(
+      x = Animals2,
+      center = fit_MCD$raw.center,
+      cov = fit_MCD$raw.cov
+    ) <= qchisq(p = .975, df = p)
+  )
+dplyr::near(fit_MCD$center,colMeans(Animals2[ind_rew_obs,]))
+dplyr::near(fit_MCD$cov,cov(Animals2[ind_rew_obs,])*prod(fit_MCD$cnp2))
+```
+
+`robustbase` provides also a nice plotting method that lets us fully
+explore the set of graphical tools we have seen in class in an almost
+automatic way:
+
+```{r}
+plot(fit_MCD,classic=TRUE)
+```
+
+We see that the outliers do not influence the robust estimates: the same
+can only be partially said when employing the classical estimators.
+
+Everything could have as always been hard-coded:
+
+```{r, class.source="extracode", eval=FALSE}
+n <- nrow(Animals2)
+sample_mean <- apply(Animals2, 2, mean)
+sample_cov <- cov(Animals2)#*(n-1)/n # by default R computes the corrected sample variance
+
+# MCD estimates
+plot(Animals2, xlim=c(-10,15),ylim=c(-5,15))
+lines(ellipse(x = fit_MCD$cov,centre=fit_MCD$center),lty=2, col="blue",type="l")
+points(x=fit_MCD$center[1],y=fit_MCD$center[2], pch="x", col="blue", cex=2)
+
+# ML estimates
+lines(ellipse(x = sample_cov, centre=sample_mean),lty=2, col="red",type="l")
+points(x=sample_mean[1],y=sample_mean[2], pch="x", col="red", cex=2)
+
+# Robust estimates
+plot(sqrt(fit_MCD$mah))
+# Classical estimates
+plot(sqrt(mahalanobis(x = Animals2,center = sample_mean, cov = sample_cov)))
+```
+
+### A somewhat less simple example
+
+Let us now consider a dataset containing measurements of $p= 9$
+characteristics of $n = 677$ diaphragm parts used in the production of
+TV sets. Diaphragm are thin metal plates, molded by a press. The aim of
+the multivariate analysis is to gain insight into the production process
+and the interrelations between the nine measurements and to find out
+whether deformations or abnormalities have occurred and why.
+
+```{r}
+data_philips <- readRDS(here::here("Block V - Robust statistics/data/data_philips.Rds"))
+```
+
+```{r}
+pairs(data_philips)
+```
+
+There is no clear visible pattern in the data, and no outliers seem to
+be present.
+
+```{r}
+fit_MCD <- covMcd(x = data_philips, alpha = .75)
+fit_MCD
+```
+
+```{r}
+plot(fit_MCD, classic=TRUE, labels.id=FALSE, which="distance")
+plot(fit_MCD,labels.id=FALSE,which=c("dd"))
+```
+
+Robust distances report a strongly deviating group of outliers, ranging
+from index $491$ to index $565$. The reason being that the process
+changed after the first $100$ points, and between index $491–565$ it was
+out of control.
+
+## Robust regression
+
+### A simple example
+
+Let us consider the Hertzsprung-Russell Diagram Data already encountered
+in the very first lab and consider the problem of regressing the
+logarithm of light intensity as a function of the logarithm of the
+effective temperature at the surface of the star.
+
+We have already seen that the OLS estimator goes bananas
+
+```{r}
+plot(starsCYG)
+fit_lm <- lm(log.light~log.Te, data=starsCYG)
+abline(fit_lm, col="red", lwd=2)
+text(starsCYG$log.Te, starsCYG$log.light, 1:nrow(starsCYG), pos=1)
+```
+
+Yet, if we were to look at standard diagnostic plots we would not grasp
+how bad the situation actually is:
+
+```{r}
+plot(fit_lm)
+```
+
+We would however if we fitted the Least Median of Squares (LMS) and the
+Least Trimmed Squares (LTS)
+
+```{r}
+fit_lms <- lmsreg(log.light~log.Te, data=starsCYG)
+
+# This is better than the previous
+fit_lts <- ltsReg(log.light~log.Te, alpha=.75,mcd=TRUE,data=starsCYG) #ltsreg in the MASS package uses an older (slower) implementation of the LTS estimator
+```
+
+```{r}
+plot(starsCYG)
+abline(fit_lm, col="red", lwd=2)
+abline(fit_lms, col="darkblue", lwd=2)
+abline(fit_lts, col="darkgreen", lwd=2)
+legend("bottomleft", c('OLS', 'LMS', 'LTS'), lwd=rep(2,4), col=c("red", "darkblue", "darkgreen"))
+```
+
+As for the MCD estimator, `robustbase` provides plotting methods for LTS
+
+```{r}
+plot(fit_lts)
+```
+
+### A somewhat less simple example
+
+We consider $40$ cases of a study on production waste and land use,
+originally published in Golueke, C.G. and McGauhey, P.H. (1970),
+Comprehensive Studies of Solid Waste Management. The response variable
+is solid waste (millions of tons), while the remaining explanatory
+variables are industrial land (acres), fabricated metals (acres),
+trucking and wholesale trade (acres), retail trade (acres) and
+restaurants and hotels (acres).
+
+```{r}
+data("waste")
+
+fit_lts <- ltsReg(SolidWaste~., alpha=.75,mcd=TRUE,data=waste) 
+summary(fit_lts)
+```
+
+```{r}
+plot(fit_lts)
+```
