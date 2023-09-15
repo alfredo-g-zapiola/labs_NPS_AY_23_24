@@ -4,7 +4,7 @@
 # Nonparametric statistics: lab notebooks
 
 This repo contains the .Rmd scripts and associated html outputs for the
-practical sessions of the ay 2022/2023 Nonparametric Statistics course,
+practical sessions of the ay 2023/2024 Nonparametric Statistics course,
 being taught at the School of Industrial and Information Engineering of
 Politecnico di Milano, Italy.
 
