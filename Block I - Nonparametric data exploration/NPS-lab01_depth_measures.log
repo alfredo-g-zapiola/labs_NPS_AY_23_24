@@ -1,0 +1,5 @@
+
+! warning: kpathsea: configuration file texmf.cnf not found in these directories: /usr/bin:/usr/bin/share/texmf-local/web2c:/usr/bin/share/texmf-dist/web2c:/usr/bin/share/texmf/web2c:/usr/bin/texmf-local/web2c:/usr/bin/texmf-dist/web2c:/usr/bin/texmf/web2c:/usr:/usr/share/texmf-local/web2c:/usr/share/texmf-dist/web2c:/usr/share/texmf/web2c:/usr/texmf-local/web2c:/usr/texmf-dist/web2c:/usr/texmf/web2c://texmf-local/web2c:/://share/texmf-local/web2c://share/texmf-dist/web2c://share/texmf/web2c://texmf-local/web2c://texmf-dist/web2c://texmf/web2c.
+
+! kpathsea: Running mktexfmt pdflatex.fmt
+! mktexfmt: No such file or directory

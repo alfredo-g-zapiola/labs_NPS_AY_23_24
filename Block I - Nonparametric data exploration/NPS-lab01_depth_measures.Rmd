@@ -1,12 +1,12 @@
 ---
 title: "Lab 01 - Depth measures"
-date: 2022/09/22
+date: 2023-09-21
 author: "Nonparametric statistics ay 2022/2023"
 output:
   
-  pdf_document: default
   html_document: 
     df_print: paged
+  pdf_document: default
   html_notebook: 
     df_print: paged
   word_document: default
@@ -30,7 +30,7 @@ background-color: lightblue;
 
 *Disclaimer 1: The present material is an adaptation of the original R
 script prepared by Dr. Matteo Fontana for the a.y. 2020/2021
-Nonparametric statistics course. While I acknowledge Matteo for the
+Nonparametric statistics course, and later Prof. Andrea Cappozzo (a.y 2022-2023) While I acknowledge Matteo and Andrea for the
 (great) work done I hereby assume responsibility for any error that may
 be present in this document.*
 
@@ -47,6 +47,7 @@ library(DepthProc)
 library(hexbin)
 library(aplpack)
 library(robustbase)
+library(MDBED)  # plot exponential bivariate distr+ibution
 ```
 
 ## Computing depths with R: some general ideas
@@ -75,11 +76,12 @@ bin=hexbin(df_bivariate_exp[,1],df_bivariate_exp[,2], xbins=10, xlab="exp 1", yl
 plot(bin, main="Hexagonal Binning") 
 ```
 
+### Depth measures (multivariate)
 Now on depths: there are many possible packages hosted on CRAN to work
 with depths in a multivariate setting. We will hereafter use
 `DepthProc`, which is a good general purpose package and in addition it
 has good plotting capabilities. Even though not all depth measures
-introduced in class are directly available (e.g., simplicial depth), it
+introduced in class are directly available  (simplicial, Oja, convex hull peeling depth), it
 includes the two depth measures we will be using throughout this
 section, namely **Tukey** and **Mahalanobis** depths. Let us look at the
 help file for the `depth` function.
@@ -91,8 +93,7 @@ typing
 tukey_depth=depth(u=df_bivariate_exp,method='Tukey')
 ```
 
-It may be useful (spoiler alert, it will become apparent why when Matteo
-will talk about nonparametric forecasting) to calculate the depth of a
+It may be useful (spoiler alert, it will become apparent why when we study onparametric forecasting) to calculate the depth of a
 point relative to a sample. You can do it by:
 
 ```{r}
@@ -111,7 +112,7 @@ Or, having already computed the Tukey depth for the entire sample:
 df_bivariate_exp[which.max(tukey_depth),]
 ```
 
-If you have the luck of dealing with a bivariate dataset, you can easily
+If you have the _luck_ of dealing with a bivariate dataset, you can easily
 visualize the depth surface in a very convenient way. `DepthProc` offers
 you two possible methods:
 
@@ -130,6 +131,16 @@ For additional special effects:
 ```{r, webgl=TRUE}
 depthPersp(df_bivariate_exp,depth_params = list(method='Tukey'),plot_method = 'rgl')
 ```
+
+##### Computational caveat
+Since the Tukey depth is obtained by counting points in the space of all hyperplanes(surfaces) in $\mathbb{R}^d$, when $d>2$, the computational burden increases. 
+Libraries usually recur to heuristic methods which lead to poor estimates (we will see this in the functional data depth measures lab)
+```{r}
+a = depthPersp(df_bivariate_exp,depth_params = list(method='Tukey'))
+
+```
+
+
 
 The very same analysis can be carried out by considering a different
 depth measure:
@@ -152,7 +163,7 @@ maha_depth_manual <- 1/(1+mahalanobis(x = df_bivariate_exp,center = sample_mean,
 ```
 
 And check that the obtained result is equal to the one obtained via the
-`depth` function
+`depth` function  ( _beware of comparing floats_)
 
 ```{r, class.source="extracode"}
 all(abs(maha_depth-maha_depth_manual)<1e-15) # food for thought: sqrt(2) ^ 2 == 2?
@@ -172,9 +183,20 @@ depthPersp(df_bivariate_exp,depth_params = list(method='Mahalanobis'),plot_metho
 ```
 
 Please note that anything that comes out of `depthContour` or
-`depthPersp` is NOT a density: we are not doing density estimation here,
+`depthPersp` is *NOT* a density: we are not doing density estimation here,
 we are performing data exploration by means of a nonparametric
 procedure.
+Let us plot the probability density function (NOT the depth function) of the bivariate exponential distribution we drew a sample from:
+```{r}
+PDF_3dPlot(rho = 0, Betax = 1, Betay = 1, title="PDF (NOT depth function) of the bivariate exponential distribution", zlabel="")
+```
+
+```{r}
+depthPersp(cbind(rexp(1e4), rexp(1e4)),depth_params = list(method='Tukey'), plot_title="Tukey depth for the exp distribution")
+```
+
+We notice that the tukey depth concentrates around the median, where as the exponential bivariate function increases as x,y go to 0. 
+
 
 ### Exercise
 
@@ -252,9 +274,13 @@ multivariate outliers is the bagplot. The `bagplot` function from the
 `aplpack` package can be used to display bagplots for bivariate data
 
 ```{r}
-bagplot(df_contaminated_normals, factor = 3)
+bagplot(df_contaminated_normals, factor = 3, show.whiskers = T)
 ```
-
+*Remember*:
+- The *bag* is composed of the deepest 50% of the data (i.e. $C_{.5}$)
+- The *fence* separates the outliers from the other observations
+- The *loop* contains data between the bag and the fence
+- Naturally, the median (i.e. the deepest datum) is inside the bag.
 If we check the help page for the `bagplot` function, we see that we
 have a lot of room for customization:
 
@@ -275,7 +301,7 @@ Once the outlying units have been identified, one can discard them from
 the original data and keep working on the clean subset only. There are
 several ways to do this.
 
-A more "sql-oriented" approach:
+A more "sql-oriented" approach (this is just a code alternative):
 
 ```{r}
 df_clean_1 <-

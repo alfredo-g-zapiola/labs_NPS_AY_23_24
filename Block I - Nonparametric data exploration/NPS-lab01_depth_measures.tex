@@ -1,0 +1,813 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+%
+\documentclass[
+]{article}
+\usepackage{amsmath,amssymb}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\usepackage[margin=1in]{geometry}
+\usepackage{color}
+\usepackage{fancyvrb}
+\newcommand{\VerbBar}{|}
+\newcommand{\VERB}{\Verb[commandchars=\\\{\}]}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% Add ',fontsize=\small' for more characters per line
+\usepackage{framed}
+\definecolor{shadecolor}{RGB}{248,248,248}
+\newenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+\newcommand{\AlertTok}[1]{\textcolor[rgb]{0.94,0.16,0.16}{#1}}
+\newcommand{\AnnotationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\AttributeTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{#1}}
+\newcommand{\BaseNTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\BuiltInTok}[1]{#1}
+\newcommand{\CharTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\CommentTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\CommentVarTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ConstantTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{#1}}
+\newcommand{\ControlFlowTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\DataTypeTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{#1}}
+\newcommand{\DecValTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\DocumentationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ErrorTok}[1]{\textcolor[rgb]{0.64,0.00,0.00}{\textbf{#1}}}
+\newcommand{\ExtensionTok}[1]{#1}
+\newcommand{\FloatTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\FunctionTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\ImportTok}[1]{#1}
+\newcommand{\InformationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\KeywordTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\NormalTok}[1]{#1}
+\newcommand{\OperatorTok}[1]{\textcolor[rgb]{0.81,0.36,0.00}{\textbf{#1}}}
+\newcommand{\OtherTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{#1}}
+\newcommand{\PreprocessorTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\RegionMarkerTok}[1]{#1}
+\newcommand{\SpecialCharTok}[1]{\textcolor[rgb]{0.81,0.36,0.00}{\textbf{#1}}}
+\newcommand{\SpecialStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\StringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\VariableTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\WarningTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\usepackage{graphicx}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+% Set default figure placement to htbp
+\makeatletter
+\def\fps@figure{htbp}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\ifLuaTeX
+  \usepackage{selnolig}  % disable illegal ligatures
+\fi
+\IfFileExists{bookmark.sty}{\usepackage{bookmark}}{\usepackage{hyperref}}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  pdftitle={Lab 01 - Depth measures},
+  pdfauthor={Nonparametric statistics ay 2022/2023},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\title{Lab 01 - Depth measures}
+\author{Nonparametric statistics ay 2022/2023}
+\date{2023-09-21}
+
+\begin{document}
+\maketitle
+
+\emph{Disclaimer 1: The present material is an adaptation of the
+original R script prepared by Dr.~Matteo Fontana for the a.y. 2020/2021
+Nonparametric statistics course, and later Prof.~Andrea Cappozzo (a.y
+2022-2023) While I acknowledge Matteo and Andrea for the (great) work
+done I hereby assume responsibility for any error that may be present in
+this document.}
+
+\emph{Disclaimer 2: I will start from the assumption that you are all
+intermediate R users, if this is not the case please let me know, and we
+shall find a solution together.}
+
+\hypertarget{loading-necessary-libraries}{%
+\subsection{Loading necessary
+libraries}\label{loading-necessary-libraries}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{library}\NormalTok{(MASS)}
+\FunctionTok{library}\NormalTok{(rgl)}
+\FunctionTok{library}\NormalTok{(DepthProc)}
+\FunctionTok{library}\NormalTok{(hexbin)}
+\FunctionTok{library}\NormalTok{(aplpack)}
+\FunctionTok{library}\NormalTok{(robustbase)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{computing-depths-with-r-some-general-ideas}{%
+\subsection{Computing depths with R: some general
+ideas}\label{computing-depths-with-r-some-general-ideas}}
+
+Let us start by simulating \(500\) bivariate datapoints whose
+distribution is marginally exponential
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{set.seed}\NormalTok{(}\DecValTok{2781991}\NormalTok{) }\CommentTok{\# reproducibility}
+\NormalTok{n}\OtherTok{=}\DecValTok{500}
+\NormalTok{df\_bivariate\_exp }\OtherTok{=} \FunctionTok{cbind}\NormalTok{(}\FunctionTok{rexp}\NormalTok{(n), }\FunctionTok{rexp}\NormalTok{(n))}
+\FunctionTok{head}\NormalTok{(df\_bivariate\_exp)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##           [,1]       [,2]
+## [1,] 0.3004277 0.35894610
+## [2,] 2.4430839 0.22392999
+## [3,] 1.8444128 0.15064919
+## [4,] 0.2383688 1.12290176
+## [5,] 1.9613656 0.07966151
+## [6,] 5.2480885 0.01762207
+\end{verbatim}
+
+and visualize their scatterplot
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{plot}\NormalTok{(df\_bivariate\_exp[,}\DecValTok{1}\NormalTok{],df\_bivariate\_exp[,}\DecValTok{2}\NormalTok{], }\AttributeTok{xlab=}\StringTok{"exp 1"}\NormalTok{, }\AttributeTok{ylab=}\StringTok{"exp 2"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{NPS-lab01_depth_measures_files/figure-latex/unnamed-chunk-4-1.pdf}
+
+We can further employ a hexagonal binning plot to visualize the data
+density
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{bin}\OtherTok{=}\FunctionTok{hexbin}\NormalTok{(df\_bivariate\_exp[,}\DecValTok{1}\NormalTok{],df\_bivariate\_exp[,}\DecValTok{2}\NormalTok{], }\AttributeTok{xbins=}\DecValTok{10}\NormalTok{, }\AttributeTok{xlab=}\StringTok{"exp 1"}\NormalTok{, }\AttributeTok{ylab=}\StringTok{"exp 2"}\NormalTok{)}
+\FunctionTok{plot}\NormalTok{(bin, }\AttributeTok{main=}\StringTok{"Hexagonal Binning"}\NormalTok{) }
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{NPS-lab01_depth_measures_files/figure-latex/unnamed-chunk-5-1.pdf}
+
+Now on depths: there are many possible packages hosted on CRAN to work
+with depths in a multivariate setting. We will hereafter use
+\texttt{DepthProc}, which is a good general purpose package and in
+addition it has good plotting capabilities. Even though not all depth
+measures introduced in class are directly available (e.g., simplicial
+depth), it includes the two depth measures we will be using throughout
+this section, namely \textbf{Tukey} and \textbf{Mahalanobis} depths. Let
+us look at the help file for the \texttt{depth} function.
+
+Calculating depth for a given dataset is immediately accomplished by
+typing
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{tukey\_depth}\OtherTok{=}\FunctionTok{depth}\NormalTok{(}\AttributeTok{u=}\NormalTok{df\_bivariate\_exp,}\AttributeTok{method=}\StringTok{\textquotesingle{}Tukey\textquotesingle{}}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+It may be useful (spoiler alert, it will become apparent why when we
+study onparametric forecasting) to calculate the depth of a point
+relative to a sample. You can do it by:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{depth}\NormalTok{(}\AttributeTok{u =} \FunctionTok{c}\NormalTok{(}\DecValTok{0}\NormalTok{, }\DecValTok{0}\NormalTok{), }\AttributeTok{X =}\NormalTok{ df\_bivariate\_exp, }\AttributeTok{method =} \StringTok{\textquotesingle{}Tukey\textquotesingle{}}\NormalTok{) }
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Depth method:  Tukey 
+## [1] 0
+\end{verbatim}
+
+Compute the median (deepest point) with \texttt{depthMedian} function
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{depthMedian}\NormalTok{(df\_bivariate\_exp,}\AttributeTok{depth\_params =} \FunctionTok{list}\NormalTok{(}\AttributeTok{method=}\StringTok{\textquotesingle{}Tukey\textquotesingle{}}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.8364350 0.9297927
+\end{verbatim}
+
+Or, having already computed the Tukey depth for the entire sample:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{df\_bivariate\_exp[}\FunctionTok{which.max}\NormalTok{(tukey\_depth),]}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.8364350 0.9297927
+\end{verbatim}
+
+If you have the luck of dealing with a bivariate dataset, you can easily
+visualize the depth surface in a very convenient way. \texttt{DepthProc}
+offers you two possible methods:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{depthContour}\NormalTok{(df\_bivariate\_exp,}\AttributeTok{depth\_params =} \FunctionTok{list}\NormalTok{(}\AttributeTok{method=}\StringTok{\textquotesingle{}Tukey\textquotesingle{}}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{NPS-lab01_depth_measures_files/figure-latex/unnamed-chunk-10-1.pdf}
+
+or
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{depthPersp}\NormalTok{(df\_bivariate\_exp,}\AttributeTok{depth\_params =} \FunctionTok{list}\NormalTok{(}\AttributeTok{method=}\StringTok{\textquotesingle{}Tukey\textquotesingle{}}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{NPS-lab01_depth_measures_files/figure-latex/unnamed-chunk-11-1.pdf}
+
+For additional special effects:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{depthPersp}\NormalTok{(df\_bivariate\_exp,}\AttributeTok{depth\_params =} \FunctionTok{list}\NormalTok{(}\AttributeTok{method=}\StringTok{\textquotesingle{}Tukey\textquotesingle{}}\NormalTok{),}\AttributeTok{plot\_method =} \StringTok{\textquotesingle{}rgl\textquotesingle{}}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+/tmp/RtmpOtg4JP/file11fce70240502.png \#\#\#\#\# Computational caveat
+Since the Tukey depth is obtained by counting points in the space of all
+hyperplanes(surfaces) in \(\mathbb{R}^d\), when \(d>2\), the
+computational burden increases.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# generate data as before}
+\NormalTok{n }
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 500
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{df\_quatrivariate\_exp }\OtherTok{=} \FunctionTok{cbind}\NormalTok{(}\FunctionTok{rexp}\NormalTok{(n), }\FunctionTok{rexp}\NormalTok{(n), }\FunctionTok{rexp}\NormalTok{(n), }\FunctionTok{rexp}\NormalTok{(n), }\FunctionTok{rexp}\NormalTok{(n))}
+\CommentTok{\# obtain tukey depth}
+\FunctionTok{depthMedian}\NormalTok{(df\_quatrivariate\_exp,}\AttributeTok{depth\_params =} \FunctionTok{list}\NormalTok{(}\AttributeTok{method=}\StringTok{\textquotesingle{}Tukey\textquotesingle{}}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.5861941 0.7504385 0.8633159 0.6090142 0.9498993
+\end{verbatim}
+
+The very same analysis can be carried out by considering a different
+depth measure:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{maha\_depth }\OtherTok{\textless{}{-}} \FunctionTok{depth}\NormalTok{(df\_bivariate\_exp,}\AttributeTok{method=}\StringTok{\textquotesingle{}Mahalanobis\textquotesingle{}}\NormalTok{) }
+\end{Highlighting}
+\end{Shaded}
+
+This can be easily hard coded, recall the definition you have seen in
+class:
+
+\[{M}_{h}D({F;X} ^ {n}) = \frac{ 1 }{ 1 + {{(x - \mu_F)} ^ {T}}{{\Sigma} ^ {-1}}(x - \mu_F) }\]
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{sample\_mean }\OtherTok{\textless{}{-}} \FunctionTok{colMeans}\NormalTok{(df\_bivariate\_exp)}
+\NormalTok{sample\_S }\OtherTok{\textless{}{-}} \FunctionTok{cov}\NormalTok{(df\_bivariate\_exp)}
+
+\NormalTok{maha\_depth\_manual }\OtherTok{\textless{}{-}} \DecValTok{1}\SpecialCharTok{/}\NormalTok{(}\DecValTok{1}\SpecialCharTok{+}\FunctionTok{mahalanobis}\NormalTok{(}\AttributeTok{x =}\NormalTok{ df\_bivariate\_exp,}\AttributeTok{center =}\NormalTok{ sample\_mean,}\AttributeTok{cov =}\NormalTok{ sample\_S))}
+\end{Highlighting}
+\end{Shaded}
+
+And check that the obtained result is equal to the one obtained via the
+\texttt{depth} function
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{all}\NormalTok{(}\FunctionTok{abs}\NormalTok{(maha\_depth}\SpecialCharTok{{-}}\NormalTok{maha\_depth\_manual)}\SpecialCharTok{\textless{}}\FloatTok{1e{-}15}\NormalTok{) }\CommentTok{\# food for thought: sqrt(2) \^{} 2 == 2?}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] TRUE
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{depthMedian}\NormalTok{(df\_bivariate\_exp,}\AttributeTok{depth\_params =} \FunctionTok{list}\NormalTok{(}\AttributeTok{method=}\StringTok{\textquotesingle{}Mahalanobis\textquotesingle{}}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.9211997 1.0228290
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{df\_bivariate\_exp[}\FunctionTok{which.max}\NormalTok{(maha\_depth\_manual),]}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.9211997 1.0228290
+\end{verbatim}
+
+And again the graphical outputs:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{depthContour}\NormalTok{(df\_bivariate\_exp,}\AttributeTok{depth\_params =} \FunctionTok{list}\NormalTok{(}\AttributeTok{method=}\StringTok{\textquotesingle{}Mahalanobis\textquotesingle{}}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{NPS-lab01_depth_measures_files/figure-latex/unnamed-chunk-18-1.pdf}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{depthPersp}\NormalTok{(df\_bivariate\_exp,}\AttributeTok{depth\_params =} \FunctionTok{list}\NormalTok{(}\AttributeTok{method=}\StringTok{\textquotesingle{}Mahalanobis\textquotesingle{}}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{NPS-lab01_depth_measures_files/figure-latex/unnamed-chunk-18-2.pdf}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{depthPersp}\NormalTok{(df\_bivariate\_exp,}\AttributeTok{depth\_params =} \FunctionTok{list}\NormalTok{(}\AttributeTok{method=}\StringTok{\textquotesingle{}Mahalanobis\textquotesingle{}}\NormalTok{),}\AttributeTok{plot\_method =} \StringTok{\textquotesingle{}rgl\textquotesingle{}}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+/tmp/RtmpOtg4JP/file11fce335b3fa0.png
+
+Please note that anything that comes out of \texttt{depthContour} or
+\texttt{depthPersp} is NOT a density: we are not doing density
+estimation here, we are performing data exploration by means of a
+nonparametric procedure.
+
+\hypertarget{exercise}{%
+\subsubsection{Exercise}\label{exercise}}
+
+Try out the routines seen so far on something even more exotic:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{set.seed}\NormalTok{(}\DecValTok{1992}\NormalTok{)}
+\NormalTok{df\_bivariate\_cauchy }\OtherTok{=} \FunctionTok{cbind}\NormalTok{(}\FunctionTok{rcauchy}\NormalTok{(n,}\AttributeTok{location=}\DecValTok{0}\NormalTok{,}\AttributeTok{scale=}\NormalTok{.}\DecValTok{001}\NormalTok{), }\FunctionTok{rcauchy}\NormalTok{(n,}\AttributeTok{location =} \DecValTok{0}\NormalTok{,}\AttributeTok{scale=}\NormalTok{.}\DecValTok{001}\NormalTok{))}
+\FunctionTok{head}\NormalTok{(df\_bivariate\_cauchy)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##               [,1]         [,2]
+## [1,] -0.0024184800 0.0008798105
+## [2,] -0.0006282804 0.0009932694
+## [3,] -0.0006975300 0.0010347342
+## [4,] -0.0038080204 0.0141419885
+## [5,]  0.0061098712 0.0014929490
+## [6,] -0.0012696290 0.0008865863
+\end{verbatim}
+
+The Cauchy distribution is a distribution that has neither the first
+moment (the mean) nor the second moment (the variance). This means that
+the CLT does not apply.
+
+\begin{itemize}
+\tightlist
+\item
+  Can we still perform non-parametric data exploration with depth
+  measures?
+\item
+  Would the Mahalanobis depth be a sensible measure to be used in this
+  context? Why not?
+\end{itemize}
+
+\hypertarget{multivariate-outlier-detection-via-depth-measures}{%
+\subsection{Multivariate outlier detection via depth
+measures}\label{multivariate-outlier-detection-via-depth-measures}}
+
+In the previous Section we have computed depth measures for a given
+dataset and we have seen how to effectively plot them. This resulted in
+a convenient way to nonparametrically explore a (bivariate) dataset.
+Nevertheless, one of the main aims for a statistician to employ depth
+measures is to perform multivariate outlier detection. To appreciate
+this, let us simulate \(100\) data points, of which \(95\%\) comes from
+a multivariate normal with mean vector \texttt{mu\_good} and covariance
+matrix \texttt{sigma\_common} and the other 5\% from another
+multivariate normal, which we assume is our outlier generator process.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{mu\_good }\OtherTok{=} \FunctionTok{c}\NormalTok{(}\DecValTok{0}\NormalTok{,}\DecValTok{0}\NormalTok{) }
+\NormalTok{mu\_outliers }\OtherTok{=} \FunctionTok{c}\NormalTok{(}\DecValTok{7}\NormalTok{,}\DecValTok{7}\NormalTok{)}
+
+\NormalTok{sigma\_common }\OtherTok{=} \FunctionTok{matrix}\NormalTok{(}\FunctionTok{c}\NormalTok{(}\DecValTok{1}\NormalTok{,.}\DecValTok{7}\NormalTok{,.}\DecValTok{7}\NormalTok{,}\DecValTok{1}\NormalTok{), }\AttributeTok{ncol =} \DecValTok{2}\NormalTok{)}
+
+\NormalTok{frac }\OtherTok{=}\NormalTok{ .}\DecValTok{05}
+\NormalTok{n}\OtherTok{=}\DecValTok{100}
+\CommentTok{\# sample points}
+\NormalTok{n\_good}\OtherTok{=}\FunctionTok{ceiling}\NormalTok{(n}\SpecialCharTok{*}\NormalTok{(}\DecValTok{1}\SpecialCharTok{{-}}\NormalTok{frac))}
+\NormalTok{n\_outliers}\OtherTok{=}\NormalTok{n}\SpecialCharTok{{-}}\NormalTok{n\_good}
+\NormalTok{df\_contaminated\_normals }\OtherTok{=} \FunctionTok{data.frame}\NormalTok{(}\FunctionTok{rbind}\NormalTok{(}
+  \FunctionTok{mvrnorm}\NormalTok{(n\_good, mu\_good, sigma\_common),}
+  \FunctionTok{mvrnorm}\NormalTok{(n\_outliers, mu\_outliers, sigma\_common)}
+\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+Let us visualize the true nature of our dataset
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{class }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}\FunctionTok{rep}\NormalTok{(}\DecValTok{1}\NormalTok{,n\_good),}\FunctionTok{rep}\NormalTok{(}\DecValTok{2}\NormalTok{,n\_outliers))}
+\FunctionTok{plot}\NormalTok{(df\_contaminated\_normals,}\AttributeTok{xlab=}\StringTok{"Norm 1"}\NormalTok{, }\AttributeTok{ylab=}\StringTok{"Norm 2"}\NormalTok{,}\AttributeTok{col=}\NormalTok{class)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{NPS-lab01_depth_measures_files/figure-latex/unnamed-chunk-21-1.pdf}
+
+We can clearly see those red points up there\ldots{} how can we flag
+them in an automated fashion? The depth contour plot surely helps
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{depthContour}\NormalTok{(}
+\NormalTok{  df\_contaminated\_normals,}
+  \AttributeTok{depth\_params =} \FunctionTok{list}\NormalTok{(}\AttributeTok{method =} \StringTok{\textquotesingle{}Tukey\textquotesingle{}}\NormalTok{),}
+  \AttributeTok{points =} \ConstantTok{TRUE}\NormalTok{,}
+  \AttributeTok{colors =} \FunctionTok{colorRampPalette}\NormalTok{(}\FunctionTok{c}\NormalTok{(}\StringTok{\textquotesingle{}white\textquotesingle{}}\NormalTok{, }\StringTok{\textquotesingle{}navy\textquotesingle{}}\NormalTok{)),}
+  \AttributeTok{levels =} \DecValTok{10}\NormalTok{,}
+  \AttributeTok{pdmedian =}\NormalTok{ F,}
+  \AttributeTok{graph\_params =} \FunctionTok{list}\NormalTok{(}\AttributeTok{cex=}\NormalTok{.}\DecValTok{01}\NormalTok{, }\AttributeTok{pch=}\DecValTok{1}\NormalTok{),}
+  \AttributeTok{pmean =}\NormalTok{ F}
+\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{NPS-lab01_depth_measures_files/figure-latex/unnamed-chunk-22-1.pdf}
+
+But, as we have seen in class, a very handy graphical tool for spotting
+multivariate outliers is the bagplot. The \texttt{bagplot} function from
+the \texttt{aplpack} package can be used to display bagplots for
+bivariate data
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{bagplot}\NormalTok{(df\_contaminated\_normals, }\AttributeTok{factor =} \DecValTok{3}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{NPS-lab01_depth_measures_files/figure-latex/unnamed-chunk-23-1.pdf}
+
+If we check the help page for the \texttt{bagplot} function, we see that
+we have a lot of room for customization:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{aplpack}\SpecialCharTok{::}\FunctionTok{bagplot}\NormalTok{(df\_contaminated\_normals,}\AttributeTok{show.whiskers =}\NormalTok{ F,}\AttributeTok{main=}\StringTok{"Bagplot"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{NPS-lab01_depth_measures_files/figure-latex/unnamed-chunk-24-1.pdf}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{aplpack}\SpecialCharTok{::}\FunctionTok{bagplot}\NormalTok{(df\_contaminated\_normals,}\AttributeTok{show.loophull =}\NormalTok{ F,}\AttributeTok{main=}\StringTok{"Sunburst plot"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{NPS-lab01_depth_measures_files/figure-latex/unnamed-chunk-24-2.pdf}
+
+In addition, if we save the output of the bagplot to an object, we can
+automatically extract the outliers
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{bagplot\_cont\_normals }\OtherTok{\textless{}{-}} \FunctionTok{bagplot}\NormalTok{(df\_contaminated\_normals)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{NPS-lab01_depth_measures_files/figure-latex/unnamed-chunk-25-1.pdf}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{outlying\_obs }\OtherTok{\textless{}{-}}\NormalTok{ bagplot\_cont\_normals}\SpecialCharTok{$}\NormalTok{pxy.outlier}
+\end{Highlighting}
+\end{Shaded}
+
+Once the outlying units have been identified, one can discard them from
+the original data and keep working on the clean subset only. There are
+several ways to do this.
+
+A more ``sql-oriented'' approach:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{df\_clean\_1 }\OtherTok{\textless{}{-}}
+\NormalTok{  dplyr}\SpecialCharTok{::}\FunctionTok{anti\_join}\NormalTok{(}
+    \AttributeTok{x =}\NormalTok{ df\_contaminated\_normals,}
+    \AttributeTok{y =}\NormalTok{ outlying\_obs,}
+    \AttributeTok{by =} \FunctionTok{c}\NormalTok{(}\StringTok{"X1"} \OtherTok{=} \StringTok{"x"}\NormalTok{, }\StringTok{"X2"} \OtherTok{=} \StringTok{"y"}\NormalTok{),}
+    \AttributeTok{copy =} \ConstantTok{TRUE}
+\NormalTok{  )}
+\end{Highlighting}
+\end{Shaded}
+
+A more ``object-oriented programming'' approach:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{ind\_outlying\_obs }\OtherTok{\textless{}{-}} \FunctionTok{which}\NormalTok{(}\FunctionTok{apply}\NormalTok{(df\_contaminated\_normals,}\DecValTok{1}\NormalTok{,}\ControlFlowTok{function}\NormalTok{(x) }\FunctionTok{all}\NormalTok{(x }\SpecialCharTok{\%in\%}\NormalTok{ outlying\_obs)))}
+\NormalTok{df\_clean\_2 }\OtherTok{\textless{}{-}}\NormalTok{ df\_contaminated\_normals[}\SpecialCharTok{{-}}\NormalTok{ind\_outlying\_obs,]}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{all.equal}\NormalTok{(df\_clean\_1,df\_clean\_2)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] TRUE
+\end{verbatim}
+
+\hypertarget{outlier-detection-in-star-cluster-cyg-ob1-data}{%
+\subsection{Outlier detection in Star Cluster CYG OB1
+data}\label{outlier-detection-in-star-cluster-cyg-ob1-data}}
+
+Data for the Hertzsprung-Russell Diagram of the Star Cluster CYG OB1,
+which contains \(47\) stars in the direction of Cygnus, from C.Doom.
+
+\begin{itemize}
+\tightlist
+\item
+  The first variable is the logarithm of the effective temperature at
+  the surface of the star (Te)
+\item
+  The second one is the logarithm of its light intensity (L/L0). The
+  Hertzsprung-Russell diagram is the scatterplot of these data points,
+  where the log temperature is plotted from left to right.
+\end{itemize}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{data}\NormalTok{(starsCYG, }\AttributeTok{package =} \StringTok{"robustbase"}\NormalTok{)}
+\FunctionTok{names}\NormalTok{(starsCYG)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] "log.Te"    "log.light"
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{plot}\NormalTok{(starsCYG, }\AttributeTok{main=}\StringTok{"Star Cluster CYG OB1"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{NPS-lab01_depth_measures_files/figure-latex/unnamed-chunk-29-1.pdf}
+
+We can see two groups of points: the majority which tends to follow a
+steep band, the so called Main Sequence, and four stars in the
+upper-left corner. In astronomy the \(43\) stars are said to lie on the
+Main sequence and the four remaining stars are the red giants, namely
+points with indexes 11, 20, 30 and 34. In details, the red giants are
+very bright, but they emit light with a very low color-temperature (and
+thus their surface temperature is still fairly low). We can easily
+isolate them thanks to the procedure seen so far. Let us look at the
+perspective plot of the depth surface
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{depthContour}\NormalTok{(}\FunctionTok{as.matrix}\NormalTok{(starsCYG), }\AttributeTok{depth\_params =} \FunctionTok{list}\NormalTok{(}\AttributeTok{method=}\StringTok{\textquotesingle{}Tukey\textquotesingle{}}\NormalTok{), }\AttributeTok{points=}\ConstantTok{TRUE}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{NPS-lab01_depth_measures_files/figure-latex/unnamed-chunk-30-1.pdf}
+
+As you can see, the sample mean is biased due to the presence of the 4
+red giants, whereas the Tukey Median is not. Let us compute it:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{depthMedian}\NormalTok{(starsCYG) }
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##    log.Te log.light 
+##      4.38      5.02
+\end{verbatim}
+
+As before, we can use the bagplot to visualize and flag the outlying
+data points.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{bagplot\_starsCYG }\OtherTok{\textless{}{-}} \FunctionTok{with}\NormalTok{(starsCYG,aplpack}\SpecialCharTok{::}\FunctionTok{bagplot}\NormalTok{(log.Te,log.light))}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{NPS-lab01_depth_measures_files/figure-latex/unnamed-chunk-32-1.pdf}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{red\_giants }\OtherTok{\textless{}{-}}\NormalTok{ bagplot\_starsCYG}\SpecialCharTok{$}\NormalTok{pxy.outlier}
+\NormalTok{ind\_outlying\_obs }\OtherTok{\textless{}{-}} \FunctionTok{which}\NormalTok{(}\FunctionTok{apply}\NormalTok{(starsCYG,}\DecValTok{1}\NormalTok{,}\ControlFlowTok{function}\NormalTok{(x) }\FunctionTok{all}\NormalTok{(x }\SpecialCharTok{\%in\%}\NormalTok{ red\_giants)))}
+\NormalTok{ind\_outlying\_obs}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 11 20 30 34
+\end{verbatim}
+
+\hypertarget{moving-beyond-r-2}{%
+\subsection{\texorpdfstring{Moving beyond
+\(R ^2\)}{Moving beyond R \^{}2}}\label{moving-beyond-r-2}}
+
+So far, we have only dealt with bivariate data. Even though the
+computational complexity escalates quickly when it comes to compute
+depth measures in \(R ^d\), with \(d>2\), we can still appreciate their
+usefulness in moderate dimension. Let us generate a trivariate dataset
+with contamination.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{mu\_good }\OtherTok{=} \FunctionTok{rep}\NormalTok{(}\DecValTok{0}\NormalTok{,}\DecValTok{3}\NormalTok{)}
+\NormalTok{mu\_outliers }\OtherTok{=} \FunctionTok{c}\NormalTok{(}\DecValTok{12}\NormalTok{,}\DecValTok{12}\NormalTok{,}\DecValTok{3}\NormalTok{)}
+
+\NormalTok{sigma\_common }\OtherTok{=} \FunctionTok{diag}\NormalTok{(}\DecValTok{3}\NormalTok{)}\SpecialCharTok{*}\DecValTok{2}
+
+\NormalTok{frac }\OtherTok{=}\NormalTok{ .}\DecValTok{1}
+\NormalTok{n}\OtherTok{=}\DecValTok{300}
+\CommentTok{\# sample points}
+\NormalTok{n\_good}\OtherTok{=}\FunctionTok{ceiling}\NormalTok{(n}\SpecialCharTok{*}\NormalTok{(}\DecValTok{1}\SpecialCharTok{{-}}\NormalTok{frac))}
+\NormalTok{n\_outliers}\OtherTok{=}\NormalTok{n}\SpecialCharTok{{-}}\NormalTok{n\_good}
+\NormalTok{df\_3 }\OtherTok{=} \FunctionTok{data.frame}\NormalTok{(}\FunctionTok{rbind}\NormalTok{(}
+  \FunctionTok{mvrnorm}\NormalTok{(n\_good, mu\_good, sigma\_common),}
+  \FunctionTok{mvrnorm}\NormalTok{(n\_outliers, mu\_outliers, sigma\_common)}
+\NormalTok{))}
+\NormalTok{class }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}\FunctionTok{rep}\NormalTok{(}\DecValTok{1}\NormalTok{,n\_good),}\FunctionTok{rep}\NormalTok{(}\DecValTok{2}\NormalTok{,n\_outliers))}
+\FunctionTok{pairs}\NormalTok{(df\_3, }\AttributeTok{col=}\NormalTok{class)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{NPS-lab01_depth_measures_files/figure-latex/unnamed-chunk-33-1.pdf}
+
+To visualize the outliers in this context we retort to a bagplot matrix:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{bagplot\_matrix }\OtherTok{\textless{}{-}}\NormalTok{ aplpack}\SpecialCharTok{::}\FunctionTok{bagplot.pairs}\NormalTok{(df\_3)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{NPS-lab01_depth_measures_files/figure-latex/unnamed-chunk-34-1.pdf}
+
+You can notice that outlier detection becomes more difficult when the
+dimension increases, as
+
+\begin{itemize}
+\tightlist
+\item
+  some outliers may be wrongly flagged as genuine points
+\item
+  some good points may be wrongly flagged as outliers
+\end{itemize}
+
+These phenomena are respectively denoted as \textbf{masking} and
+\textbf{swamping}, we will cover it in details during the robust
+statistics module of this course!
+
+Let us conclude this lab session by looking at some DD-plots. For two
+probability distributions \(F\) and \(G\) , both in \(R ^d\), and
+\(D(\cdot)\) an affine-invariant depth, we can define depth vs.~depth
+plot being very useful generalization of the one dimensional
+quantile-quantile plot:
+
+\[
+D D(F, G)=\left\{\left(D_{F}(x), D_{G}(x)\right) \text { for all } x \in \mathbb{R}^{d}\right\}
+\]
+
+Its sample counterpart calculated for two samples
+\(\mathbf{X} =\left\{X_1, \cdots, X_n \right\}\) from \(F\), and
+\(\mathbf{Y} =\left\{Y_1, \cdots, Y_m \right\}\) from \(G\) is defined
+as
+
+\[
+D D\left(F_{n}, G_{m}\right)=\left\{\left(D_{F_{n}}(z), D_{G_{m}}(z)\right), z \in\{\mathbf{X} \cup \mathbf{Y}\}\right\}
+\]
+
+The \texttt{ddPlot} function automatically computes and plots it:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{df\_good }\OtherTok{\textless{}{-}}\NormalTok{ df\_3[}\DecValTok{1}\SpecialCharTok{:}\NormalTok{n\_good,]}
+\NormalTok{df\_out }\OtherTok{\textless{}{-}}\NormalTok{ df\_3[(n\_good}\SpecialCharTok{+}\DecValTok{1}\NormalTok{)}\SpecialCharTok{:}\NormalTok{n,]}
+\FunctionTok{ddPlot}\NormalTok{(}\AttributeTok{x =}\NormalTok{ df\_good,}\AttributeTok{y =}\NormalTok{ df\_out,}\AttributeTok{depth\_params =} \FunctionTok{list}\NormalTok{(}\AttributeTok{method=}\StringTok{\textquotesingle{}Tukey\textquotesingle{}}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## DDPlot
+\end{verbatim}
+
+\includegraphics{NPS-lab01_depth_measures_files/figure-latex/unnamed-chunk-35-1.pdf}
+
+\begin{verbatim}
+## 
+## Depth Metohod:
+##   Tukey
+\end{verbatim}
+
+They would line up if they came from the same distribution
+
+It is easy to manually build a DD-plot
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{depth\_good }\OtherTok{\textless{}{-}} \FunctionTok{depth}\NormalTok{(}\AttributeTok{u =}\NormalTok{ df\_3,}\AttributeTok{X =}\NormalTok{ df\_good,}\AttributeTok{method =} \StringTok{"Tukey"}\NormalTok{)}
+\NormalTok{depth\_out }\OtherTok{\textless{}{-}} \FunctionTok{depth}\NormalTok{(}\AttributeTok{u =}\NormalTok{ df\_3,}\AttributeTok{X =}\NormalTok{ df\_out,}\AttributeTok{method =} \StringTok{"Tukey"}\NormalTok{)}
+\FunctionTok{plot}\NormalTok{(depth\_good,depth\_out, }\AttributeTok{col=}\StringTok{"blue"}\NormalTok{, }\AttributeTok{xlab=}\StringTok{"X depth"}\NormalTok{, }\AttributeTok{ylab=}\StringTok{"Y depth"}\NormalTok{, }\AttributeTok{main=} \StringTok{"Depth vs. depth plot"}\NormalTok{)}
+\FunctionTok{grid}\NormalTok{(}\DecValTok{10}\NormalTok{, }\DecValTok{10}\NormalTok{, }\AttributeTok{col=}\StringTok{"grey50"}\NormalTok{, }\AttributeTok{lty=}\DecValTok{1}\NormalTok{)}
+\FunctionTok{abline}\NormalTok{(}\DecValTok{0}\NormalTok{,}\DecValTok{1}\NormalTok{, }\AttributeTok{col=}\StringTok{"grey50"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{NPS-lab01_depth_measures_files/figure-latex/unnamed-chunk-36-1.pdf}
+
+Clearly the distributions are not the same\ldots{} What if we had some
+extra samples coming from \(F\) (e.g., the trivariate normal centered at
+\(0\))?
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{n\_extra }\OtherTok{\textless{}{-}} \DecValTok{100}
+\NormalTok{df\_extra }\OtherTok{\textless{}{-}} \FunctionTok{data.frame}\NormalTok{(}\FunctionTok{mvrnorm}\NormalTok{(n\_extra, mu\_good, sigma\_common))}
+\FunctionTok{ddPlot}\NormalTok{(}\AttributeTok{x =}\NormalTok{ df\_extra, df\_good,}\AttributeTok{depth\_params=}\FunctionTok{list}\NormalTok{(}\AttributeTok{method=}\StringTok{\textquotesingle{}Tukey\textquotesingle{}}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## DDPlot
+\end{verbatim}
+
+\includegraphics{NPS-lab01_depth_measures_files/figure-latex/unnamed-chunk-37-1.pdf}
+
+\begin{verbatim}
+## 
+## Depth Metohod:
+##   Tukey
+\end{verbatim}
+
+Indeed this time we can conclude the same distribution generated the
+data.
+
+\end{document}
