@@ -276,11 +276,13 @@ multivariate outliers is the bagplot. The `bagplot` function from the
 ```{r}
 bagplot(df_contaminated_normals, factor = 3, show.whiskers = T)
 ```
+
 *Remember*:
-- The *bag* is composed of the deepest 50% of the data (i.e. $C_{.5}$)
-- The *fence* separates the outliers from the other observations
-- The *loop* contains data between the bag and the fence
-- Naturally, the median (i.e. the deepest datum) is inside the bag.
+
+* The *bag* is composed of the deepest 50% of the data (i.e. $C_{.5}$)
+* The *fence* separates the outliers from the other observations
+* The *loop* contains data between the bag and the fence
+* Naturally, the median (i.e. the deepest datum) is inside the bag.
 If we check the help page for the `bagplot` function, we see that we
 have a lot of room for customization:
 
