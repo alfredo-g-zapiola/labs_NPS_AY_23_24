@@ -1,7 +1,7 @@
 ---
 title: "Lab 01 - Depth measures"
 date: 2023-09-21
-author: "Nonparametric statistics ay 2022/2023"
+author: "Nonparametric statistics ay 2023/2024"
 output:
   
   html_document: 
