@@ -1,14 +1,14 @@
 ---
 title: "Lab 02 - Depth measures for functional data"
-date: 2022/09/27
-author: "Nonparametric statistics ay 2022/2023"
+date: 2023/09/26
+author: "Nonparametric statistics ay 2023/2024"
 output:
   
   html_document: 
     df_print: paged
-  pdf_document: default
   html_notebook: 
     df_print: paged
+  pdf_document: default
   word_document: default
 editor_options: 
   chunk_output_type: console
@@ -41,7 +41,7 @@ department, you have already seen during class that some of the
 state-of-the-art techniques were actually developed here. Depth-based
 techniques find a natural application in Functional Statistics. I assume
 that many of you already know what we mean by functional data (applied
-statistics course docet), nevertheless do not worry if you do not: I
+statistics course *docet*), nevertheless do not worry if you do not: I
 have structured this lab as a very basic primer to understand how to do
 some methodological and applied work in the framework of functional data
 analysis (FDA).
@@ -53,8 +53,8 @@ random functions and can be viewed as trajectories of stochastic
 processes defined on a given infinite dimensional functional space.
 
 A natural way to reason (and actually comprehend why they need specific
-and peculiar techniques) is to think about them as relatively dense
-longitudinal data: unlike tabular data, functional data are not
+and peculiar techniques) is to think about them as **relatively dense
+longitudinal data**: unlike tabular data, functional data are not
 invariant to permutations of their dimensions (i.e., if I switch two
 columns of a standard multivariate dataset no harm is done, if I do it
 with a functional one, I will create a bloody mess).
@@ -63,39 +63,41 @@ Given its ubiquitous presence in applications FDA has been a very active
 research field in the past decades, with a plethora of R packages
 developed for helping practitioner efficiently and effectively employ
 such techniques. In what follows we will focus our attention on the
-`roahd` package (developed by members and former members of our
-Department of Mathematics): a package meant to collect and provide
-methods for the analysis of univariate and multivariate functional
-datasets through the use of robust methods. First off we will dedicate
-some time in understanding how to represent these complex infinite
-dimensional objects (our computers only deal with finite approximations)
-and how to simulate functional data. We will then focus on computation
-of depths and outlier detection. This lab WILL NOT provide a thorough
-treatment of FDA, but we will limit to study some introductory concepts
-on how to deal with univariate (and bivariate, only very briefly)
-functional datasets.
+`roahd` (\*RObust Analysis of High Dimensional Data) package (developed
+by members and former members of our Department of Mathematics): a
+package meant to collect and provide methods for the analysis of
+univariate and multivariate functional datasets through the use of
+robust methods. First off we will dedicate some time in understanding
+how to represent these complex infinite dimensional objects (our
+computers only deal with finite approximations) and how to simulate
+functional data. We will then focus on computation of depths and outlier
+detection. This lab WILL NOT provide a thorough treatment of FDA, but we
+will limit to study some introductory concepts on how to deal with
+univariate (and bivariate, only very briefly) functional datasets.
 
 ## Simulating functional data with roahd package
 
 The way `roahd` package represents functional objects is by providing an
 evenly spaced grid $I=\left[t_{0}, t_{1}, \ldots, t_{P-1}\right]$
 $\left(t_{j}-t_{j-1}=h>0, \: \forall j=1, \ldots, P-1\right)$ over which
-the functional observations $D_{i, j}=X_{i}\left(t_{j}\right)$
+the functional observations $D_{i, j}=X_{i}\left(t_{j}\right)$ (*i.e.*
+the $i$th function evaluated at the $j$th point of the grid)
 $\forall i=1, \ldots, N$ and $\forall j=0, \ldots, P-1$ are measured.
 This is very conveniently handled by the `fData` object class. In
 particular, the following model is considered for the generation of
 data: $$
 X(t)=m(t)+\varepsilon(t), \text { for all } t \text { in } I
-$$ where $m(t)$ is the mean function and $\varepsilon(t)$ is a centered
-Gaussian process with covariance function $C(\cdot,\cdot)$. That is to
-say: $$
+$$ where $m(t)$ is the mean function (deterministic) and
+$\varepsilon(t)$ is a centered Gaussian process with covariance function
+$C(\cdot,\cdot)$. That is to say: $$
 \operatorname{Cov}(\varepsilon(\mathrm{s}), \varepsilon(t))=C(s, t), \text { with } s, t \text { in } I
 $$ The employed structure for $C(s, t)$ is the Exponential covariance
 function:
 
 $$
 C(s, t)=\alpha e^{-\beta|s-t|}
-$$
+$$ Where $alpha$ controls the point-wise variance, and $\beta$ the
+degree of covariance between points.
 
 ```{r}
 P <- 101
@@ -105,6 +107,7 @@ alpha <-  0.2
 beta <-  0.2
 
 C_st <- exp_cov_function( grid, alpha, beta )
+dim(C_st)  # note of course it is a covariance matrix
 ```
 
 `C_st` contains a $P \times P$ matrix of values.
@@ -127,6 +130,7 @@ we are ready to generate functional data as follows
 n <- 100
 set.seed(26111992)
 data <- generate_gauss_fdata(N = n,centerline = m,Cov=C_st)
+dim(data) # 100 functions evaluated at 101 points each
 ```
 
 The output of the previous chunk is actually a $n \times P$ matrix,
@@ -136,14 +140,14 @@ grid (this is actually the best we can do). We can plot it with:
 
 ```{r}
 matplot(grid,t(data), type="l", col=adjustcolor(col=1,alpha.f = .4))
-lines(grid,m, col="blue", lwd=5)
+lines(grid,m, col="blue", lwd=5)  # add something else on top of existing graph
 ```
 
 Or even better we exploit the features of the `roahd` package to
 construct a functional object:
 
 ```{r}
-f_data <- fData(grid,data)
+f_data <- fData(grid, data)
 plot(f_data) # what happens if I do plot(data)?
 lines(grid,m, col="black", lwd=5)
 ```
@@ -208,9 +212,10 @@ signals. The registered and smoothed signals are contained in the
 `mfD_healthy` object.
 
 ```{r}
-data("mfD_healthy") # 
+data("mfD_healthy") # included in roahd
 univariate_fdata <- mfD_healthy$fDList[[1]] # I consider the first lead only
-plot(univariate_fdata)
+print(class(univariate_fdata))  #fData object
+plot(univariate_fdata) # can do it directly with an fData object
 ```
 
 With `roadhd` it is very easy to compute Band depths and Modified band
@@ -243,42 +248,65 @@ plot(univariate_fdata)
 grid_ecg <- seq(median_curve_manual$t0,median_curve_manual$tP,by=median_curve_manual$h)
 lines(grid_ecg,median_curve_manual$values)
 ```
+
 ### Parenthesis: the failure of multivariate depth functions in high dimensinons
 
 What if we used the Tukey Median for a functional datum? Let's try it:
 
 ```{r}
+set.seed(2)
+n = 32
+# generate functional datset
+grid = seq(0,1,length.out=1000)
+alpha <-  1
+beta <-  0.2
+C_st <- exp_cov_function( grid, alpha, beta )
+m <- sin(pi*grid)+sin(2*pi*grid)
+data <- generate_gauss_fdata(N = n,centerline = m,Cov=C_st)
+f_data = fData(grid=grid, values=data)  # cast to fData
 plot(f_data)
-grid.fdata = seq(0,1, length.out = 101)
-lines(grid.fdata, median_curve$values, col="black")
+median.mbd =  median_fData(fData = f_data, type = "MBD")
+
+lines(grid, median.mbd$values, col="black")
 library(DepthProc)
 tukey.depth=depth(u=f_data$values,method='Tukey')
 tukey.deepest.idx = which(tukey.depth==max(tukey.depth))
-lines(grid.fdata, f_data$values[tukey.deepest.idx[1],], col="red")
+lines(grid, f_data$values[tukey.deepest.idx[1],], col="red")
 
 ```
 
-It does not seem like a correct estimator for location... This is due to the fact that as $d$ increases, heuristic approaches are utilised for classical depth measures (such as Tukey depth), yielding poor estimation.
+It does not seem like a correct estimator for location... This is due to
+the fact that as $d$ increases, heuristic approaches are utilised for
+classical depth measures (such as Tukey depth), yielding poor
+estimation. Remember, in the multivariate setting, depth measures deal
+with the "**center-outward order**", whereas in FDA we try to obtain a
+"**down-upward order**".
+
+### Spearman's correlation index for functiona data
 
 Epigraph Index (EI) and Hypograph Index (HI) or their corresponding
 Modified versions (MEI and MHI) for providing down-upward/up-downward
 order of data can also be computed: see functions `EI`, `HI`, `MEI`,
 `MHI`. As an example, let us compute the Spearman's correlation index
 between the first and second lead of the ECG signals. Recall that for a
-bivariate functional dataset $[\mathbf{x} \mathbf{y}]$
+bivariate functional dataset $[\mathbf{x}, \mathbf{y}]$, the estimate
+for Spearman's correlation index
+$\hat{\rho}_{s}(\mathbf{x}, \mathbf{y})$ is given
 
 $$
-\hat{\rho}_{s}(\mathbf{x}, \mathbf{y})=\hat{\rho}_{p}\left(I L_{n}-\operatorname{grade}(\mathbf{x}), I L_{n}-\operatorname{grade}(\mathbf{y})\right)
+\hat{\rho}_{s}(\mathbf{x}, \mathbf{y})=\hat{\rho}_{p}\left(I L\operatorname{grade}_{n}(\mathbf{x}), I L\operatorname{grade}_{n}(\mathbf{y})\right)
 $$ where $\hat{\rho}_{p}$ is the sample Pearson correlation coefficient
-and $$
+and $I L\operatorname{grade}_{n}$ is the Inferior-Length w.r.t the
+sample and $$
 \begin{aligned}
 &I L_{n}-\operatorname{grade}(\mathbf{x})=\left(I L_{n}-\operatorname{grade}\left(x_{1}\right), I L_{n}-\operatorname{grade}\left(x_{2}\right), \ldots, I L_{n}-\operatorname{grade}\left(x_{n}\right)\right) \\
 &I L_{n}-\operatorname{grade}(\mathbf{y})=\left(I L_{n}-\operatorname{grade}\left(y_{1}\right), I L_{n}-\operatorname{grade}\left(y_{2}\right), \ldots, I L_{n}-\operatorname{grade}\left(y_{n}\right)\right) .
 \end{aligned}
-$$ where the inferior length grade $I L_{n}-\operatorname{grade}(x_i)$
+$$ where the inferior length grade $I L\operatorname{grade}_{n}(x_i)$
 can be interpreted as the "proportion of time" that the sample
 $x_1,\ldots,x_n$ is smaller than $x_i$, that is it defines the relative
-position of a curve with respect to the sample.
+position of a curve with respect to the sample (it pretty much counts
+what percentage of the domain curve $i$ is higher than other samples)
 
 The Spearman's correlation index is immediately obtained via the
 `cor_spearman` function
@@ -292,7 +320,7 @@ cor_spearman(bivariate_data, ordering='MHI')
 Or actually we can manually compute it:
 
 ```{r, class.source="extracode"}
-MHI_first_lead <- MHI(bivariate_data$fDList[[1]])
+MHI_first_lead <- MHI(bivariate_data$fDList[[1]]) # modified hypograph
 MHI_second_lead <- MHI(bivariate_data$fDList[[2]])
 
 cor(MHI_first_lead, MHI_second_lead)
@@ -302,7 +330,9 @@ Coding tip: never forget the power of functional programming!
 
 ```{r, class.source="extracode"}
 do.call(args = lapply(1:2, function(ind)
-  MHI(bivariate_data$fDList[[ind]])), what = "cor")
+  MHI(bivariate_data$fDList[[ind]])) # list of arguments
+  , what = "cor" # name of the function
+  )
 ```
 
 ## Outlier detection with roahd: functional boxplots and outliergrams
@@ -312,7 +342,7 @@ outliers in a functional sample. Consider the following univariate
 functional data
 
 ```{r}
-
+n = 100
 alpha <-  0.2
 beta <-  0.002
 
@@ -359,8 +389,14 @@ and shape outliers, respectively.
 
 ```{r}
 invisible(fbplot(f_data_mag, main="Magnitude outliers"))
-invisible(outliergram(f_data_mag))
+
 ```
+
+Recall:
+
+-   The central region ("functional bag") contains the functions with
+    the highest MBD value
+-   The central region is inflated by factor $F$ to obtain the fences.
 
 I used `invisible()` in the previous chunk to avoid the output of the
 call to be printed on the console (and in the knitted html file). If I
@@ -368,11 +404,23 @@ do not use it I obtain the following:
 
 ```{r}
 fbplot(f_data_shape, main="Shape outliers")
+
+```
+
+Now, we plot the outliergram.
+
+```{r}
 outliergram(f_data_shape)
 ```
 
 We appreciate how the shape outliers are almost entirely missed by the
 functional boxplot, whereas the outliergram effectively uncovers them.
+Recall the important result:
+
+$$
+MBD(f) \leq a_0 + a_1 MEI(f) + a_2 N^2 MEI^2(f)
+$$ where MBD represents the **Modified Band Depth** and MEI the
+**Modified Epygraph Index**.
 
 As usual, saving the output of the plots to an object allows to recover
 the ID of the identified outliers:
