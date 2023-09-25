@@ -1,0 +1,42 @@
+---
+title: "TDE"
+output: html_document
+date: '2023-09-25'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Exam style questions
+## Algorithmic instructions
+
+*  All the numerical values required need to be put on an A4 sheet and uploaded, alongside
+the required plots.
+*  For all computations based on permutation/resampling, as well as split conformal, use B = 1000 replicates, and seed = 1991.
+* Both for confidence and prediction intervals, as well as tests, set α = 0.05.
+*  When reporting a test result, please specify H0, H1 , the P−value and the corresponding
+conclusion.
+* When reporting confidence/prediction intervals, always provide upper and lower bound.
+
+
+### Exercise 1
+Dr. Yorkhamikis has been long retired from the academy. Time has definitely passed since he left his Associate Professor job at a prestigious university in Milan to go back to his hometown in Greece, where he currently raises cattle. 
+He still keeps his quantitative approach though, and has instructed his employee to gather data relative to three key quantities concerning the milk of his cows (filename $milk_samples_1.Rds$) Assume observations to be independent between them.
+
+1. Dr. Yorkhamikis distrusts his employee, and is convinced there are observations that were not written down correctly and thus are not coherent with the true data. Devise a graphic method to retrieve such entries looking at the three measures relative to the milk and report the incoherent values.
+
+2. The distrust of the Dr. has been increasing a lot lately. He now also suspects that the second half of the observations were invented by his employee, who supposedly preferred to make the data up and have a nap. Dr. Yorkhamikis says this will be evident in the median of the PH of the second half of the observations, which should be quite different from the median of the industry standard which is $n$. Implement a pertinent (two-sided) statistical test relative to the median of the PH of the second half of the observations and write down your conclusions.
+
+3. Repeat the test for the .25th quantile, using for $H_0$ the .25th quantile equals the one of the first half  (first 160-something rows) of the population.
+
+
+
+```{r}
+#setwd("Exam_style_exercises/") # Important to access files
+#load(file = "Exam_style_exercises/data/milk_samples_1.Rds") what happens if you run this line?
+df.latte = readRDS(file = "data/milk_samples_1.Rds")
+
+# set "global" variables
+```
+
