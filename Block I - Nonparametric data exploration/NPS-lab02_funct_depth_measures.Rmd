@@ -6,20 +6,21 @@ output:
   
   html_document: 
     df_print: paged
+  pdf_document: default
   html_notebook: 
     df_print: paged
-  pdf_document: default
   word_document: default
 editor_options: 
   chunk_output_type: console
   markdown: 
     wrap: 72
+
 ---
 
 ```{r setup, include=FALSE}
-#library(rgl)
-#knitr::opts_chunk$set(echo = TRUE)
-#knitr::knit_hooks$set(webgl = hook_webgl)
+library(rgl)
+knitr::opts_chunk$set(echo = TRUE)
+knitr::knit_hooks$set(webgl = hook_webgl)
 ```
 
 ```{css, echo=FALSE}
@@ -362,7 +363,7 @@ set.seed(33) # reproducibility
 outlier_share <- .1
 n_outliers <-   n*outlier_share
 out_highlighter <- rep(c(1,2),c(n-n_outliers,n_outliers))
-f_data_temp <- f_data[1:(n*(1-outlier_share)),] # Coding tip: subsetting is mabe possible by the S3 class fdata
+f_data_temp <- f_data[1:(n*(1-outlier_share)) ,] # Coding tip: subsetting is mabe possible by the S3 class fdata
 mag_temp <- f_data[(n*(1-outlier_share)+1):n,] * runif(10,2,3)
 
 f_data_mag <- append_fData(f_data_temp,mag_temp)
@@ -419,7 +420,8 @@ Recall the important result:
 
 $$
 MBD(f) \leq a_0 + a_1 MEI(f) + a_2 N^2 MEI^2(f)
-$$ where MBD represents the **Modified Band Depth** and MEI the
+$$
+where MBD represents the **Modified Band Depth** and MEI the
 **Modified Epygraph Index**.
 
 As usual, saving the output of the plots to an object allows to recover
@@ -439,7 +441,12 @@ MBD_out_shape <- MBD(f_data_shape)
 a_0 <- a_2 <- -2/(f_data_shape$N*(f_data_shape$N-1))
 a_1 <- 2*(f_data_shape$N+1)/(f_data_shape$N-1)
 d_manual <- a_0+a_1*MEI_out_shape+a_2*f_data_shape$N^2*MEI_out_shape^2-MBD_out_shape
-ID_outliers_manual <- which(d_manual>quantile(d_manual,probs = .75)+out_shape$Fvalue*IQR(x = d_manual))
+
+critical.quantile = quantile(d_manual,probs = .75)
+inflation =out_shape$Fvalue
+inter.q.range = IQR(x = d_manual)
+
+ID_outliers_manual <- which(d_manual > critical.quantile + inflation *inter.q.range )
 ```
 
 Let us check that our manual computations are correct:
@@ -457,6 +464,6 @@ actually pretty easy:
 
 ```{r message=FALSE, warning=FALSE, evNal=FALSE}
 set.seed(22)
-fbplot(f_data_mag, main="Magnitude outliers",adjust = list(VERBOSE=FALSE))
-outliergram(f_data_mag,adjust = list(VERBOSE=FALSE))
+fbplot(f_data_mag, main="Magnitude outliers",adjust = F)
+outliergram(f_data_mag,adjust = F)
 ```
