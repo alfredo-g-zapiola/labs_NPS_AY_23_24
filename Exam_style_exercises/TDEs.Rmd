@@ -7,36 +7,240 @@ date: '2023-09-25'
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+```{css, echo=FALSE}
+.extracode {
+background-color: lightblue;
+}
+```
 
 # Exam style questions
+
 ## Algorithmic instructions
+(Pasted from an actual exam, we will use some of the parameters later)
 
-*  All the numerical values required need to be put on an A4 sheet and uploaded, alongside
-the required plots.
-*  For all computations based on permutation/resampling, as well as split conformal, use B = 1000 replicates, and seed = 1991.
-* Both for confidence and prediction intervals, as well as tests, set α = 0.05.
-*  When reporting a test result, please specify H0, H1 , the P−value and the corresponding
-conclusion.
-* When reporting confidence/prediction intervals, always provide upper and lower bound.
-
+*   All the numerical values required need to be put on an A4 sheet and uploaded, alongside the required plots.
+*   For all computations based on permutation/resampling, as well as split conformal, use B = 1000 replicates, and seed = 1991.
+*  Both for confidence and prediction intervals, as well as tests, set α = 0.05.
+*   When reporting a test result, please specify H0, H1 , the P−value and the corresponding conclusion.
+*   When reporting confidence/prediction intervals, always provide upper and lower bound.
 
 ### Exercise 1
-Dr. Yorkhamikis has been long retired from the academy. Time has definitely passed since he left his Associate Professor job at a prestigious university in Milan to go back to his hometown in Greece, where he currently raises cattle. 
-He still keeps his quantitative approach though, and has instructed his employee to gather data relative to three key quantities concerning the milk of his cows (filename $milk_samples_1.Rds$) Assume observations to be independent between them.
 
-1. Dr. Yorkhamikis distrusts his employee, and is convinced there are observations that were not written down correctly and thus are not coherent with the true data. Devise a graphic method to retrieve such entries looking at the three measures relative to the milk and report the incoherent values.
+_Dr. Yorkhamikis has been long retired from the academy. Time has definitely passed since he left his Associate Professor job at a prestigious university in Milan to go back to his hometown in Greece, where he currently raises cattle. He still keeps his quantitative approach though, and has instructed his employee to gather data relative to three key quantities concerning the milk of his cows (filename_ milk_samples_1.Rds _Assume observations to be independent between them._
 
-2. The distrust of the Dr. has been increasing a lot lately. He now also suspects that the second half of the observations were invented by his employee, who supposedly preferred to make the data up and have a nap. Dr. Yorkhamikis says this will be evident in the median of the PH of the second half of the observations, which should be quite different from the median of the industry standard which is $n$. Implement a pertinent (two-sided) statistical test relative to the median of the PH of the second half of the observations and write down your conclusions.
+1.  _Dr. Yorkhamikis distrusts his employee, and is convinced there are observations that were not written down correctly and thus are not coherent with the true data. Utilise the multivariate extension of boxplots to retrieve such entries looking at all of the three measures relative to the milk and report the indices associated to such rows._
 
-3. Repeat the test for the .25th quantile, using for $H_0$ the .25th quantile equals the one of the first half  (first 160-something rows) of the population.
+```{r}
+ALPHA = 0.05 # set values as required
+B = 1e4
+
+# load data set
+df.latte <- readRDS(file = "data/milk_samples_1.Rds")
+library(aplpack)
+# of course, the bagplot is the multivariate extension of the boxplot
+# since we are dealing with 3 dimensions, we use a bagplot matrix where at each square we have a bagplot of two measures
+bagplot_matrix <- aplpack::bagplot.pairs(df.latte)
+```
+To identify the outliers, the procedure is the following:
+
+* For each pair of measures (dimensions):
+  + Obtain the bagplot (each bagplot is bi-dimensional).
+  + Label as outliers points which lie outside the fence ^[You may ask yourselves why the function does not require the method to compute the depth. The bagplot uses the Tukey depth to recognise the deepest 50% of the data set]
+  + Append the indices of those outliers to the general outlier list
+
+
+```{r}
+
+OUTLIER.INDICES = as.numeric(0)  # initialise the vector containing the outlier indices
+
+df.first.comb = df.latte[,c(1,2)]  # take the first two measures
+# retrieve the outliers from the bagplot of the comparison of the first two mearues
+bagplot.first.comb = bagplot(df.first.comb)
+outliers.first = bagplot.first.comb$pxy.outlier  # N.B. this function retrieves the rows which are outliers, NOT the indices
+
+# we thus extract the outlier indices (this is just a copy-paste of the first laboratory)
+indices.one = which(apply(df.first.comb,1,function(x) all(x %in% outliers.first)))
+
+# combine elements
+OUTLIER.INDICES = c(OUTLIER.INDICES, indices.one)
+OUTLIER.INDICES
+```
 
 
 
 ```{r}
-#setwd("Exam_style_exercises/") # Important to access files
-#load(file = "Exam_style_exercises/data/milk_samples_1.Rds") what happens if you run this line?
-df.latte = readRDS(file = "data/milk_samples_1.Rds")
+# we continue the analysis by comparing the other dimensions
+df.second = df.latte[,c(1,3)]
+bagplot.second.comb = bagplot(df.second)
+outliers.second = bagplot.second.comb$pxy.outlier
+indices.two = which(apply(df.second,1,function(x) all(x %in% outliers.second)))
 
-# set "global" variables
+OUTLIER.INDICES <- c(OUTLIER.INDICES, indices.two)
+
+
+df.third = df.latte[,c(2,3)]
+bagplot.third.comb = bagplot(df.third)
+outliers.third = bagplot.third.comb$pxy.outlier
+indices.three = which(apply(df.third,1,function(x) all(x %in% outliers.third)))
+
+OUTLIER.INDICES <- c(OUTLIER.INDICES, indices.three)
+unique(OUTLIER.INDICES) # retrieve the unique entries
 ```
+
+
+
+
+2.  _The distrust of the Dr. has been increasing a lot lately. He now also suspects that the second half of the observations were invented by his employee, who supposedly preferred to make the data up and have a nap. Dr. Yorkhamikis says this will be evident in the median of the PH of the second half of the observations (of course look only at the ones who were written down correctly), which should be quite different from the median of the industry standard which is_ $6.5$   _Implement a pertinent nonparametric statistical test ^[When this TDE was created, we had only studied the sign tests, so there is only one coherent possibility. In the exam, we will be more specific, since you could think of a sign test, a Mann-Whitney signed rank test, a permutation test, a Bootstrap test... ] to evaluate whether PH of the second half of the observations is different from the industry standard and write down your conclusions_.
+
+We first firstly manipulate the data frame to obtain the relevant data. 
+```{r}
+# remove the outliers
+df.purged = df.latte[-OUTLIER.INDICES,]
+# focus on the measure under question
+PH <- df.purged$Native_pH
+# retrieve the second half of the observations
+PH <- PH[ceiling(length(PH)/2):length(PH)]
+
+```
+The used test is a sign test.
+Let $X$ be the R.V. representing the measure of the milk's PH.
+We test:
+$$
+H_0 = \{ \mathbb{P}[X > 6.5]  = 0.5 \}
+$$
+_versus_
+$$
+H_1 = \{ \mathbb{P} [X > 6.5] \neq 0.5 \}
+$$
+(i.e. if the population's median is $6.5$ vs. it is not).
+
+
+The test statistic is going to be:
+$$w* := max(w, N-w)$$
+where 
+$$
+w := \sum_{i=1}^{N} \mathcal{1}_{\{x_i > 6.5 \}}
+$$
+That is, the count of data points that are higher than the hypothesised median (naturally $x_i$ denotes the $i$th statistical unit present in the sample and $N$ is the sample size).
+We choose the maximum between $w$ and $N-w$ since the value will be symmetric with respect to the median under $H_0$ (which is $0.5 * N$)
+ 
+Assumptions:
+
+* Observations are i.i.d.
+* Under H0, the test statistic has the following property:
+$$
+w* \stackrel{H_0}{\sim} Binomial(N, 0.5)
+$$
+
+
+
+```{r}
+median.h0 <- 6.5
+n <- length(PH)
+w <- sum(PH > median.h0)
+w.star <- max(c(w, n - w))
+
+# plot distribution under H_0
+plot(0:n, dbinom(0:n, n, 0.5))
+# add value of test statistic obtained with the sample
+abline(v = c(w, n-w), col='red')
+
+```
+
+We calculate the p-value $p$ in the following way:
+$$
+p = \mathbb{P}_{H_0}[W^* \geq w^* ] = 2 \sum_{n=w*}^N \binom{N}{n}0.5^n(1-0.5)^{N-n}
+$$
+(we calculate the mass of the right tail of the binomial distribution using the value of the statistic obtained with the sample and multiply it by two since it is symmetric about $0.5n$)
+
+```{r}
+p.value <- 2*(1 - pbinom(w.star-1, n, 0.5, lower.tail = T) )
+p.value
+```
+Which can be computed manually:
+```{r, class.source="extracode"}
+
+bin.pmf <- function(x) (choose(n, x) * 0.5^x *(1-0.5)**(n-x))
+
+p.value <- 2 * (1 - sum(sapply(1:(w.star-1),  FUN=bin.pmf ))
+                )
+p.value
+```
+
+Moreover, is tantamount to ^[execute _?pbinom_ and look the lower.tail argument]:
+```{r}
+p.value <- 2*( pbinom(w.star-1, n, 0.5, lower.tail = F) )
+p.value
+```
+Or much more simply:
+```{r}
+binom.test(sum(w), n, p=0.5, alternative="two.sided",
+           conf.level = 1-ALPHA)
+```
+
+
+
+The p-value is practically zero (which is coherent with the fact the value we obtained of the statistic is positioned at the tails of the distribution), meaning we reject $H_0$ in favour of $H_1$: we have statistical evidence to assert that the median of the second half of the (clean) observations is different from the industry standard.
+(Alternatively, we could state that the confidence interval obtained from the Binomial distribution does not contain the value under $H_0$ so we reject $H_0$).
+
+
+3.  _Repeat the test for the .25th quantile, using for_ $H_0$ _the .25th quantile equals the one of the first half (first 160-something rows) of the population._
+
+We first obtain the first half of the actual (i.e. without outliers) observations relative to the PH, and retrieve the value we are going to test against.
+```{r}
+PH.first.half = df.purged$Native_pH[1:ceiling(length(df.purged$Native_pH)/2)]
+H0.value = quantile(PH.first.half, .25)
+```
+
+
+The test statistic is^[we could also just use the count of winners against $c_0$ and have under $H_0$ a $Binomial(n, 0.75)$, as we would expect $75%$ of data to be higher than the $25th$ quantile :
+$$
+w := n-\sum_{i=1}^N \mathcal{1}_{\{ x_i > c_0\}}
+$$
+ We test
+$$
+H_0 = \{\mathbb{P}[X > 0.25] = c_0 \}
+$$
+_versus_
+$$
+H_1 = \{\mathbb{P}[X > 0.25] \neq c_0 \}
+$$
+Having that:
+$$
+w \stackrel{H_0}{\sim} Binomial(N, .25)
+
+$$
+
+```{r}
+n <- length(PH) 
+w <- n - sum(PH > H0.value)
+
+plot(0:n, dbinom(0:n, n, 0.25))
+abline(v = c(w), col='red')
+
+```
+Since the Binomial distribution is no longer symmetric (whenever its probability parameter is different from $0.5$), the calculation of the p-value is more complex, _i.e._ we cannot take one tail's mass and double it anymore ^[See https://en.wikipedia.org/wiki/Binomial_test for details]
+
+As we saw before, once we build the statistic, we can apply the function:
+```{r}
+binom.test(w, n, 0.25, alternative="two.sided", conf.level = 1-ALPHA)
+```
+We fail to reject $H_0$: we have no statistical evidence to suggest the $.25th$ quantile of the second half of the sample is different from that of the first half.
+
+
+4. _Mention the theoretical properties of the test you have used._
+
+The sign test does not make assumptions of the underlying distribution of the data sample.
+
+Under $H_0$, the distribution of the test statistic is Binomial. This is a discrete distribution, whence the sample size $n$ determines achievable levels of significance that can be built without a randomisation strategy. 
+
+If the underlying distribution of the sample is symmetric, and its first moment exists, then this test is tantamount to testing a hypothesised mean (the median matches the mean).
+
+As $n$ grows, the distribution under $H_0$ of the statistic converges to $N(\frac{n}{2}, \frac{n}{4})$
+
+It supports a one-sided version (focusing on the pertinent tail), and the testing of a certain value of the quantile (although the symmetry of the binomial distribution is lost)
+
+Extensions to discrete and ordinal data are available.
+
+
 
