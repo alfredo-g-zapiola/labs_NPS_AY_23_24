@@ -25,3 +25,5 @@ install.packages('np','KernSmooth','splines', 'fda', 'mgcv', 'gam') # non parame
 install.packages(c("survival", "survminer")) # survival analysis packages
 install.packages(c("robustbase", "RobStatTM", "DescTools", "psych")) # robust statistics packages
 ```
+### Contact info
+For questions, suggestions, bug reports, et cetera write to `alfredo.gimenez@polimi.it`
