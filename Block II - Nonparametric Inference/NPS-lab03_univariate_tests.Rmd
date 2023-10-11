@@ -17,9 +17,9 @@ editor_options:
 ---
 
 ```{r setup, include=FALSE}
-library(rgl)
 knitr::opts_chunk$set(echo = TRUE)
-knitr::knit_hooks$set(webgl = hook_webgl)
+#knitr::opts_chunk$set(eval = FALSE)
+knitr::opts_chunk$set(cache = TRUE)
 ```
 
 ```{css, echo=FALSE}
@@ -44,23 +44,20 @@ My idea of this lecture is, alongside giving you some ideas on how to
 write some code to perform simulations (that may be useful for your
 projects and/or your thesis work), is to give you some hands on
 experience on why nonparametric tests are important, and what happens if
-you decide to use a parametric test when its assumptions are not
-verified.
+you decide to use a parametric test when its assumptions are **not verified**.
 
 Let's start with an easy case: I want to test the equality of
-distributions. In other words, let $Y_1$ and $Y_2$ be two independent
-random variables, and the statistical hypothesis I want to test is
+distributions. In other words, let $Y_1$ and $Y_2$ be two **independent random variables**,
+and the statistical hypothesis I want to test is
 $H_0: Y_1\stackrel{d}{=}Y_2$ vs $H_1: Y_1 \stackrel{d}{\neq} Y_2$.
 
 What I will be going to see is, in this context, the behavior of the
-empirical type-I error (i.e. the one that I measure in the practice)
+empirical type-I error ^[Recall: type-I error is the probability of "seeing something that is not there", _i.e._ of rejecting $H_0$ when it is not true] (i.e. the one that I measure in the practice)
 with respect to the nominal one. To do so, I will compute, using data
-sampled from different distributions, the empirical probability
-distribution of the p-value of a t-test, the test of choice in the case
+sampled from different distributions, **the empirical probability distribution of the p-value of a t-test**, the test of choice in the case
 of normal distributions with equal variances, under $H_0$ (which, we
 know (and if we do not, we should...) that, if all the assumptions are
-respected, should be distributed as a continuous uniform over the
-support $[0,1]$ ), and using it, I will compute the empirical type-I
+respected, **should be distributed as a continuous uniform over the support $[0,1]$** ), and using it, I will compute the empirical type-I
 error.
 
 So, let's start with setting the scene a bit:
@@ -68,8 +65,8 @@ So, let's start with setting the scene a bit:
 ```{r}
 alpha <- 0.05
 n <- 10
-B <- 1e3
-seed <- 26111992
+B <- 5e4
+seed <- 21071865
 sigma <- 2
 ```
 
@@ -82,31 +79,31 @@ plot(x.grid, dnorm(x.grid,sd=sigma), type='l')
 ```
 
 Now, let's directly estimate the distribution: I initialize my vector of
-values (so my cycle is faster), I use a progress bar (*so i don't get
-frustrated...*) and then I compute B times the p-value:
+values (so my cycle is faster), I use a progress bar (*so i don't get frustrated*) and then I compute B times the p-value:
 
 (you can actually see the progress bar if you run the instructions in
 the console)
 
 ```{r echo=TRUE}
 p.value <- numeric(B)
-#pb=progress_bar$new(total=B)
-#pb$tick(0)
+#pb=progress_bar$new(total=B). # uncomment to use the progress bar
 set.seed(seed)
+# pb$tick(0) # indicate the start of the loop
 for(j in 1:B){
+  # sample from the normal distribution
   x1 <- rnorm(n,sd=sigma)
   x2 <- rnorm(n,sd=sigma)
-  p.value[j] <- t.test(x1,y=x2)$p.value
-  #pb$tick()
+  p.value[j] <- t.test(x1,y=x2, paired=F)$p.value
+  # pb$tick() # tell the progress bar object one iteration is done
 }
 ```
 
-Let's see the empirical distribution, as well the empirical cumulative
-distribution function, compared to the one of a continuous uniform...
+Let us see the empirical distribution, as well the empirical cumulative
+distribution function of the p-values in the simulation, compared to the one of a continuous uniform...
 
 ```{r}
-hist(p.value, main = 'Normal')
-plot(ecdf(p.value), main = 'Normal')
+hist(p.value, main = 'T test on normal data p-value epdf')
+plot(ecdf(p.value), main = 'T test on normal data p-value ecdf')
 abline(0,1, lty=2, col='red')
 ```
 
@@ -116,13 +113,16 @@ The empirical type-I error of the test in this situation is indeed....
 
 ```{r}
 estimated.alpha <- sum(p.value < alpha)/B
-c(estimated.alpha - sqrt(estimated.alpha*(1-estimated.alpha)/B)*qnorm(0.975),
-  estimated.alpha,
-  estimated.alpha + sqrt(estimated.alpha*(1-estimated.alpha)/B)*qnorm(0.975))
+# produce a confidence interval for the estimated type-I error
+c(lower=estimated.alpha - sqrt(estimated.alpha*(1-estimated.alpha)/B)*qnorm(0.975),
+  estimate=estimated.alpha,
+  upper=estimated.alpha + sqrt(estimated.alpha*(1-estimated.alpha)/B)*qnorm(0.975))
 ```
+Since the CI includes $p=.5$, we cannot reject the $H_0$ that the type-I error
+for the t-test under normality 
+*NOTA BENE*: this CI is asymptotic ^[Remember properties of MC estimation!. *Cf.* this: https://quant.stackexchange.com/questions/17204/what-does-convergence-in-monte-carlo-simulation-mean]
 
-Let's try to see what happens with a leptokurtic dataset (a "sharper"
-distribution, e.g a Uniform)
+Let's try to see what happens with a leptokurtic (*i.e* a distribution with excess kurtosis $\equiv$ relatively heavy tails) ^["Kurtic" refers to kurtosis (how "fat" tails are.) *Leptos* means thin, *Platus* flat & wide  See https://en.wiktionary.org/wiki/platykurtic] dataset.
 
 ```{r}
 semiamp=sqrt(6)
@@ -157,14 +157,15 @@ much, let's estimate also the empirical type-I error
 
 ```{r}
 estimated.alpha <- sum(p.value < alpha)/B
-c(estimated.alpha - sqrt(estimated.alpha*(1-estimated.alpha)/B)*qnorm(0.975), estimated.alpha, estimated.alpha + sqrt(estimated.alpha*(1-estimated.alpha)/B)*qnorm(0.975))
+c(lower=estimated.alpha - sqrt(estimated.alpha*(1-estimated.alpha)/B)*qnorm(0.975), point=estimated.alpha, 
+  upper=estimated.alpha + sqrt(estimated.alpha*(1-estimated.alpha)/B)*qnorm(0.975))
 ```
 
-What happens with platikurtic datasets?
-
+What happens with platikurtic (wider tails, hence there are more outliers) datasets?
+The t distribution is known for having fatter tails than the normal distribution.
 ```{r}
 x.grid <- seq(-5, 5, by=0.01)
-plot(x.grid, dt(x.grid, 1), type='l')
+plot(x.grid, dt(x.grid, 1), type='l', main="Normal (black) vs. T (red) distribs") 
 lines(x.grid, dnorm(x.grid,sd=sigma),col='red')
 
 ```
@@ -221,7 +222,9 @@ distributions are very useful to simulate heavy-tailed data...
 
 ```{r}
 x.grid <- seq(-5, 5, by=0.01)
-plot(x.grid, dstable(x.grid,1,0), type='l') #cauchy
+plot(x.grid, dstable(x.grid,
+                     alpha=1,
+                     beta=0), type='l', main="Distribs for increasing alpha") #cauchy
 lines(x.grid, dstable(x.grid,2,0), type='l',col="red") #normal
 lines(x.grid, dstable(x.grid,1.5,0), type='l',col="orange")
 lines(x.grid, dstable(x.grid,0.5,0), type='l',col="green")
@@ -230,9 +233,9 @@ lines(x.grid, dstable(x.grid,0.1,0), type='l',col="blue")
 ```
 
 ```{r}
-plot(x.grid, dstable(x.grid,1,0), type='l') #cauchy
-lines(x.grid, dstable(x.grid,1,0.5), type='l',col="red")
-lines(x.grid, dstable(x.grid,1,1), type='l',col="orange")
+plot(x.grid, dstable(x.grid,1,beta=0), type='l', main="Stable dists for increasing beta") #cauchy
+lines(x.grid, dstable(x.grid,1,beta=0.5), type='l',col="red")
+lines(x.grid, dstable(x.grid,1,beta=1), type='l',col="orange")
 
 ```
 
@@ -240,7 +243,7 @@ Let's see what happens with a stable with $\alpha=1.5$
 
 ```{r}
 x.grid <- seq(-5, 5, by=0.01)
-plot(x.grid, dnorm(x.grid), type='l')
+plot(x.grid, dnorm(x.grid), type='l', main="Normal vs stable (alpha =1.5) distrib")
 lines(x.grid, dstable(x.grid,1.5,0), type='l',col='red')
 ```
 
@@ -271,7 +274,7 @@ c(estimated.alpha - sqrt(estimated.alpha*(1-estimated.alpha)/B)*qnorm(0.975), es
 ```
 
 Same conclusions as before, the p-value is not distributed as a uniform,
-and my test is not exact anymore!
+and my test is not exact anymore!^[N.B. instead of testing the CI of the p-value, you could perform a KS test on the uniformness of the distribution]
 
 What happens instead with something with $\alpha=0.5$?
 
@@ -305,14 +308,25 @@ abline(0,1, lty=2, col='red')
 estimated.alpha <- sum(p.value < alpha)/B
 c(estimated.alpha - sqrt(estimated.alpha*(1-estimated.alpha)/B)*qnorm(0.975), estimated.alpha, estimated.alpha + sqrt(estimated.alpha*(1-estimated.alpha)/B)*qnorm(0.975))
 ```
+Again, the empirical p-value of the test is lower than the nominal one.
 
-Let's use the $\alpha=1.5$ example as a testbed: we see that the t-test
+Let's use the $\alpha=1.5$ example as a testbed: we have seen that the t-test
 to check equality in distribution in this case is a TERRIBLE idea, let's
-see though how nonparametric tests behave
+see though how nonparametric tests behave.
 
 ### Exploiting Nonparametric tests
 
-Let's see what's going on with Wilcoxon
+Let's see what's going on with Mann-Whitney U test.
+Recall that we have, for two independent random samples $X$ _et_ $Y$.
+$$
+H_0: X \stackrel{d}{=}Y \;\; versus \;\; H_1: \mathbb{P}[X>Y] \neq 0.5
+$$
+Counterintutively, we perform such test with the use of the `wilcox.test` function,
+setting the `paired` argument as `FALSE`, and filling arguments `x` and `y` with the respective samples
+
+For the one sample signed-rank test, we run `wilcox.test` giving a value only `x` and setting `y=NULL`.
+For the two-sample paired Wilcoxon test, `wilcox.test` is used with values for `x`, `y` and `paired=T`.
+
 
 ```{r}
 p.value <- numeric(B)
@@ -323,7 +337,7 @@ for(j in 1:B)
 {
   x.1 <- rstable(n,1.5,0)
   x.2 = rstable(n,1.5,0)
-  p.value[j] <- wilcox.test(x.1,y=x.2)$p.value
+  p.value[j] <- wilcox.test(x.1,y=x.2, paired=F, conf.level = 1-alpha)$p.value
   #pb$tick()
 }
 
@@ -337,14 +351,16 @@ abline(0,1, lty=2, col='red')
 
 ```{r}
 estimated.alpha <- sum(p.value < alpha)/B
-c(estimated.alpha - sqrt(estimated.alpha*(1-estimated.alpha)/B)*qnorm(0.975), estimated.alpha, estimated.alpha + sqrt(estimated.alpha*(1-estimated.alpha)/B)*qnorm(0.975))
+c(lower=estimated.alpha - sqrt(estimated.alpha*(1-estimated.alpha)/B)*qnorm(0.975), 
+  point=estimated.alpha,
+  upper=estimated.alpha + sqrt(estimated.alpha*(1-estimated.alpha)/B)*qnorm(0.975))
 
 ```
+Wait, why does not it look as a uniform distribution? Why does not the CI include $p=.5$? This is due to the discreteness of the distribution of the $U$ statistic (we have that $n_1 = n_2 = 10$). You can check it by yourselves (*cf.* _Mann-Whitney U test.R_ that in such case
+the distribution of the $U_1$ and $U_2$ statistics under $H_0$ have only 98 distinct
+values, limiting the achievable p-values. If you rerun the above code with $n=30$ you can ascertain the empirical p-value CI will contain the nominal p-value of the test.
 
-We can clearly observe the quantised nature of the p-values of the test,
-as well as the fact that the p-value is now a uniform (even if
-discrete...) and the empirical type-I error is equal to the theoretical
-one.
+
 
 Quite unfortunately for you, to my (and prof. Vantini's knowledge) there
 are no particularly good implementations in R for permutation tests...
@@ -354,12 +370,13 @@ can call when we need it...
 ```{r}
 perm_t_test=function(x,y,iter=1e3){
   
-  T0=abs(mean(x)-mean(y))  
-  T_stat=numeric(iter)
-  x_pooled=c(x,y)
+  T0=abs(mean(x)-mean(y))  # define the test statistic
+  T_stat=numeric(iter) # a vector to store the values of each iteration
+  x_pooled=c(x,y) # pooled sample
   n=length(x_pooled)
   n1=length(x)
-  for(perm in 1:iter){
+  
+  for(perm in 1:iter){ # loop for conditional MC
     # permutation:
     permutation <- sample(1:n)
     x_perm <- x_pooled[permutation]
@@ -378,15 +395,17 @@ perm_t_test=function(x,y,iter=1e3){
 ```
 
 ```{r}
-p.value <- numeric(1e3)
+B2 = 1e4
+p.value <- numeric(B2)
+
 #pb=progress_bar$new(total=B)
 #pb$tick(0)
 set.seed(seed)
-for(j in 1:1e3)
+for(j in 1:B2)
 {
   x.1 <- rstable(n,1.5,0)
   x.2 = rstable(n,1.5,0)
-  p.value[j] <- perm_t_test(x.1,x.2,iter=1000)
+  p.value[j] <- perm_t_test(x.1,x.2,iter=1e3)
   #pb$tick()
 }
 ```
@@ -398,32 +417,43 @@ abline(0,1, lty=2, col='red')
 ```
 
 ```{r}
-estimated.alpha <- sum(p.value < alpha)/B
-c(estimated.alpha - sqrt(estimated.alpha*(1-estimated.alpha)/B)*qnorm(0.975), estimated.alpha, estimated.alpha + sqrt(estimated.alpha*(1-estimated.alpha)/B)*qnorm(0.975))
+estimated.alpha <- sum(p.value < alpha)/B2
+c(lower=estimated.alpha - sqrt(estimated.alpha*(1-estimated.alpha)/B)*qnorm(0.975), estimate=estimated.alpha, 
+  upper=estimated.alpha + sqrt(estimated.alpha*(1-estimated.alpha)/B)*qnorm(0.975))
 ```
 
 The p-value is actually distributed as a uniform (discrete also in this
-case) and the empirical type-I error is fine...
+case) and the empirical type-I error is fine.
 
 
 ## Assessment Empirical Level of Type-II error
+
+Recall: type II error means not seeing something (deem $H_0$ true) that is actually there ($H_1$ is true). Its counterpart is the power of the test, i.e. its ability
+to detect $H_1$ when it is true.
 
 How do I compare "valid" (i.e. tests where the theoretical type-I error
 is equal to the empirical one?) via the Type-II error, or the
 statistical power of the test (which is 1 minus type-II error)
 
-In "easy" cases the power can be assessed analytically, for Wilcoxon and
-Permutation tests, we need simulation. Let's select the hardest case, so
+In "easy" cases the power can be assessed analytically. For Wilcoxon and
+Permutation tests, we need simulation. Let us select the hardest case, so
 a stable with $\alpha=0.5$, and, fixed the data and the significance
 level, let's cycle over a grid of effect sizes, and see what is the most
-powerful test in identifying things
+powerful test in identifying things.
 
+The algorithm is the following:
+
+* A grid of delta of location shifts is defined
+* For each value of delta, $B$ statistical tests are carried out.
+* With the $B$ p-values, the percentage of runs in which $H_1$ was detected is computed
 ```{r}
-delta_grid=seq(.5,2,by=.5)
+delta_grid=seq(.5,2,by=.5) # very useful function ;)
 set.seed(seed)
+B <- 1e3
 ```
 
 ```{r}
+# Empirical power of the Mann-Whitney test
 power_wilcox=numeric(length(delta_grid))
 for(ii in 1:length(delta_grid)){
       p.value <- numeric(B)
@@ -445,6 +475,7 @@ for(ii in 1:length(delta_grid)){
 ```
 
 ```{r}
+# Empirical power of the Permutation t-test
 power_perm_1=numeric(length(delta_grid))
 set.seed(seed)
 for(ii in 1:length(delta_grid)){
@@ -472,7 +503,7 @@ test: instead of using the mean, let's use the median...
 perm_median_test=function(x,y,iter=1e3){
   
   
-  T0=abs(median(x)-median(y))  
+  T0=abs(median(x)-median(y))  # test statistic: here we use the medians instead of the means
   T_stat=numeric(iter)
   x_pooled=c(x,y)
   n=length(x_pooled)
@@ -514,14 +545,18 @@ for(ii in 1:length(delta_grid)){
 }      
 ```
 
+And now, we visualise the typical "power-delta plot".
+
 ```{r}
 plot(delta_grid,power_perm,type='l', main='Power',ylim=c(0,1))
 lines(delta_grid,power_wilcox,col='red')
 lines(delta_grid,power_perm_1,col='blue')
+legend(x="top",legend=c("Perm. median", "Wilcoxon", "Perm mean"), col=c("black", "red", "blue"), lty=1, lwd=1)
+
 ```
 
 What's happening here? Why such a low power for the mean-based
-permutation test? Think about it...
+permutation test? Think about it...^[ _Cum grano salis_ you may realise it is due to the fact that with $\alpha = 0.5$ the data are heavily concentrated around the mean, so the permutational distribution (which is naturally conditioned on the sample) of the mean will have less extreme values thatn the permutational distribution of the median. Of course, such difference is not expected when the stable distribution is a normal one. ]
 
 And again, what happens, instead, when I use a nonparametric test while
 I could've used a parametric one?
@@ -623,9 +658,65 @@ for(ii in 1:length(delta_grid)){
 plot(delta_grid,power_t,ylim=c(0,1), main='Power, normal case',type='l')
 lines(delta_grid,power_wilcox,col='red')
 lines(delta_grid,power_perm,col='blue')
-#lines(delta_grid,power_median,col='green')
+lines(delta_grid,power_median,col='green')
 
 ```
 
 So, apart from wasting some time with the computation, you're not
 actually losing much... ;)
+
+Lastly, recall the first part of this lab. We say that the parametric t-test has a uniform p-value distribution even with non-normal data, in the case of a Leptokurtic distribution ( _i.e._ the uniform.) Is its power impacted too? We compare it to its permutational version.
+
+First, the power of the parametric test:
+
+```{r}
+set.seed(seed)
+power_t=numeric(length(delta_grid)) #I can actually compute in an analytical fashion, but let's go with sim also here.
+for(ii in 1:length(delta_grid)){
+  p.value <- numeric(B)
+  #pb=progress_bar$new(total=B)
+  #pb$tick(0)
+  delta=delta_grid[ii]
+  for(j in 1:B){
+    
+    x.1 <- runif(100,0,6)
+    x.2 = runif(100,0+delta,6+delta)
+    p.value[j] <- t.test(x.1,y=x.2)$p.value
+    #pb$tick()
+    }
+  
+  estimated.power <- sum(p.value < alpha)/B
+  power_t[ii]=estimated.power
+}
+```
+And its permutational counterpart:
+```{r}
+power_perm_1=numeric(length(delta_grid))
+set.seed(seed)
+for(ii in 1:length(delta_grid)){
+  p.value <- numeric(B)
+  pb=progress_bar$new(total=B)
+  pb$tick(0)
+  delta=delta_grid[ii]
+  for(j in 1:B){
+    
+    x.1 <- runif(100,0,6)
+    x.2 = runif(100,0+delta,6+delta)
+    p.value[j] <- perm_t_test(x.1,x.2,iter=1e3)
+    pb$tick()
+    }
+  
+  estimated.power <- sum(p.value < alpha)/B
+  power_perm_1[ii]=estimated.power
+}      
+```
+We finally plot:
+```{r}
+plot(delta_grid,power_t,ylim=c(0,1), main='Power, uniform case',type='l')
+lines(delta_grid,power_perm_1,col='red')
+```
+And observe that indeed the permutation test is more powerful!
+
+
+
+
