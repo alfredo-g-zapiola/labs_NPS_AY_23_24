@@ -1,0 +1,173 @@
+---
+title: "Lab 06 - Permutational Testing in Regression"
+date: 2023/10/13
+author: "Nonparametric statistics ay 2023/2024"
+output:
+  
+  html_document: 
+    df_print: paged
+  pdf_document: default
+  html_notebook: 
+    df_print: paged
+  word_document: default
+editor_options: 
+  chunk_output_type: inline
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+library(rgl)
+knitr::opts_chunk$set(echo = TRUE)
+knitr::knit_hooks$set(webgl = hook_webgl)
+```
+
+```{css, echo=FALSE}
+.extracode {
+background-color: lightblue;
+}
+```
+
+
+
+```{r}
+set.seed(1992)
+n <- 30
+B <- 1e3
+```
+
+## Permutation Testing in Regression
+
+We have now seen many applications of permutation testing to various real-world methodological issues... The last one is regression.
+In this case we will work with some simulated data: specifically data generated from a linear model with a heavy-tailed error term
+
+```{r}
+# covariate values
+x1 <- runif(n,0,10)
+x2 <- (1:n)/5
+x3 <- rnorm(n,5,5)
+
+
+# generating model
+b0 <- 2
+b1 <- 3
+b2 <- -2
+b3 <- 0
+Y <- b0 + b1*x1 + b2*x2 + b3*x3 + stabledist::rstable(n,1.2,0)
+```
+
+Let's run some plots...
+
+```{r}
+plot(x1,Y,pch=16)
+plot(x2,Y,pch=16)
+plot(x3,Y,pch=16)
+```
+
+And, let's see how parametric inference behaves in this case (spoiler alert, badly. Homework: why?)^[If you clicked this footnote, perhaps you were looking for the solution. What was the main message of Lab$03$?]
+
+```{r}
+# parametric inference
+result <- lm(Y ~ x1 + x2 + x3)
+summary(result)
+```
+
+We notice that the hypothesis of the model do not hold, in fact we
+reject the normality of the residuals:
+
+```{r}
+shapiro.test(result$residuals)$p
+qqnorm(result$residuals)
+```
+A geeky parenthesis. We have seen a sort of nonparametric counterpar to the qqplot, right?
+Let us use it!
+
+```{r}
+n <- length(result$residuals)
+set.seed(1992)
+normal <- as.matrix(rnorm(n, sd=summary.lm(result)$sigma))  # unbiased estimate of residual variance
+
+DepthProc::ddPlot(x = normal,y = as.matrix(as.matrix(result$residuals)),depth_params = list(method='Tukey'))
+```
+Let us go back to regression.
+
+How do I behave in this case, permutationally?
+
+Let's start with a **global test**. In this case my test statistic is:
+
+```{r}
+T0_glob <- summary(result)$f[1]
+T0_glob
+```
+
+The permutation scheme to use for the global model is basically, to **permute the responses**...
+Basically, if there was no model (i.e. my $H_0$, that every coefficient is 0), it wouldn't matter which input I'm giving, I should expect the same response. So permuting them wouldn't lead to a difference under the null hypothesis:
+
+```{r}
+T_H0glob <- numeric(B)
+
+for(perm in 1:B){
+  permutation <- sample(n)
+  
+  Y.perm.glob <- Y[permutation]
+  T_H0glob[perm] <- summary(lm(Y.perm.glob ~ x1 + x2 + x3))$f[1]
+  
+}
+
+sum(T_H0glob>=T0_glob)/B
+```
+
+Ok, the model is significant, let's go ahead with the other tests...
+The three test statistics are...
+
+```{r}
+T0_x1 <- abs(summary(result)$coefficients[2,3])
+T0_x1
+
+T0_x2 <- abs(summary(result)$coefficients[3,3])
+T0_x2
+
+T0_x3 <- abs(summary(result)$coefficients[4,3])
+T0_x3
+```
+
+And, let's compute the residuals under $H_0$ for the three hypotheses
+
+```{r}
+
+regr.H01 <- lm(Y ~ x2 + x3)
+residuals.H01 <- regr.H01$residuals
+
+regr.H02 <- lm(Y ~ x1 + x3)
+residuals.H02 <- regr.H02$residuals
+
+regr.H03 <- lm(Y ~ x1 + x2)
+residuals.H03 <- regr.H03$residuals
+```
+
+Now, let's compute the distribution
+
+```{r}
+ T_H01 <- T_H02 <- T_H03 <- numeric(B)
+
+for(perm in 1:B){
+  permutation <- sample(n)
+  
+  residuals.H01.perm <- residuals.H01[permutation]
+  Y.perm.H01 <- regr.H01$fitted + residuals.H01.perm
+  T_H01[perm] <- abs(summary(lm(Y.perm.H01 ~ x1 + x2 + x3))$coefficients[2,3])
+  
+  residuals.H02.perm <- residuals.H02[permutation]
+  Y.perm.H02 <- regr.H02$fitted + residuals.H02.perm
+  T_H02[perm] <- abs(summary(lm(Y.perm.H02 ~ x1 + x2 + x3))$coefficients[3,3])
+  
+  residuals.H03.perm <- residuals.H03[permutation]
+  Y.perm.H03 <- regr.H03$fitted + residuals.H03.perm
+  T_H03[perm] <- abs(summary(lm(Y.perm.H03 ~ x1 + x2 + x3))$coefficients[4,3])
+  
+}
+
+sum(T_H01>=T0_x1)/B
+sum(T_H02>=T0_x2)/B
+sum(T_H03>=T0_x3)/B
+```

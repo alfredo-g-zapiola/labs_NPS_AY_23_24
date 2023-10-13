@@ -1,0 +1,437 @@
+---
+title: "Lab 05 - Permutational ANOVA"
+date: 2023/10/13
+author: "Nonparametric statistics ay 2023/2024"
+output:
+  
+  html_document: 
+    df_print: paged
+  pdf_document: default
+  html_notebook: 
+    df_print: paged
+  word_document: default
+editor_options: 
+  chunk_output_type: inline
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+library(rgl)
+knitr::opts_chunk$set(echo = TRUE)
+knitr::knit_hooks$set(webgl = hook_webgl)
+```
+
+```{css, echo=FALSE}
+.extracode {
+background-color: lightblue;
+}
+```
+
+
+```{r}
+B = 1e3
+seed = 26111992
+```
+
+## Permutational ANOVA
+
+Until now, we have seen how to perform basic statistical tests in a nonparametric and, mainly and more importantly, in a permutational framework.
+By going further on this line of thinking, one can perform analysis of variance in a fully permutational (and thus exact...) setting.
+The example we will see today is about a fairly old dataset, appeared on Biometrika in 1948 (!!).
+It is about an experiment over a number of chickens, fed with different feed types, which were weighted by the experimenter.
+You are interested in determining if the feed type has an impact on the chicken weight or not.
+
+Let's import and summarise the dataset
+
+
+```{r}
+
+chickwts
+attach(chickwts)
+summary(chickwts)
+```
+
+and, let's try to plot the results, to get a bit of info about what's going on...
+
+```{r}
+g <- nlevels(feed)
+n <- dim(chickwts)[1]
+
+
+plot(feed, weight, xlab='treat',col=rainbow(g),main='Original Data')
+```
+
+The null hypothesis that we want to test is that, being $\tau_i, i\in \{1,\ldots6\}$ the generic effect of a given level of the treatment.
+$$
+H_0: \tau_i=0\;\forall i\;vs\;H_1:\exists\,\tau_i\neq0 
+$$
+
+Of course we can solve this in a fully parametric (and admittedly not robust...) way
+
+```{r}
+fit <- aov(weight ~ feed)
+summary(fit)
+
+```
+
+The strategy that I use to perform permutational ANOVA is to "permutationalise" the F statistic, by computing its permutational distribution under $H_0$.
+So...
+
+```{r}
+T0 <- summary(fit)[[1]][1,4]  # extract the test statistic
+T0
+
+```
+
+To compute the distribution, one simply "scales up" the one used for the 2-sample t-test: I assign at random the treatments (that, under $H_0$, should all be equal, and equal to 0)
+
+```{r}
+T_stat <- numeric(B) 
+n <- dim(chickwts)[1]
+
+for(perm in 1:B){
+  # Permutation:
+  permutation <- sample(1:n)
+  weight_perm <- weight[permutation]
+  fit_perm <- aov(weight_perm ~ feed)
+  
+  # Test statistic:
+  T_stat[perm] <- summary(fit_perm)[[1]][1,4]
+}
+
+```
+
+Let's see the distribution, and then the p-value of the permutational f-test
+
+```{r}
+hist(T_stat,xlim=range(c(T_stat,T0)),breaks=30)
+abline(v=T0,col=3,lwd=2)
+
+plot(ecdf(T_stat),xlim=c(-1,20))
+abline(v=T0,col=3,lwd=4)
+
+# p-value
+p_val <- sum(T_stat>=T0)/B
+p_val
+```
+
+Let's see what happens instead when using `lmPerm`
+
+```{r}
+library(lmPerm)
+lmp=aovp(weight_perm ~ chickwts$feed,
+         perm="Prob",
+         Cp=0.1)#cp is supposed to stop iterations when standard error is at that level...
+summary(lmp)
+```
+
+let's reduce the expected standard error...
+
+```{r}
+lmp=aovp(weight_perm ~ chickwts$feed,perm="Prob",Cp=1e-6)
+summary(lmp)
+```
+
+and let's run the instruction several times
+
+```{r}
+lmp=aovp(weight_perm ~ chickwts$feed,perm="Prob",Cp=1e-6)
+summary(lmp)
+
+lmp=aovp(weight_perm ~ chickwts$feed,perm="Prob",Cp=1e-6)
+summary(lmp)
+
+lmp=aovp(weight_perm ~ chickwts$feed,perm="Prob",Cp=1e-6)
+summary(lmp)
+
+```
+One may hypothesise such variance in the obtained p-value is a consequence of the number of iterations. Anyways, **it doesn't really make much sense. Don't use it.**
+
+
+## Multivariate Analysis of Variance
+
+The strategy behind the multivariate analysis of variance is admittedly fairly similar.
+We use the Iris dataset
+
+```{r}
+data(iris)
+attach(iris)
+head(iris)
+table(iris$Species)
+```
+
+let's arrange it a bit, and plot it.
+
+```{r}
+species.name <- factor(Species, labels=c('setosa','versicolor','virginica'))
+iris4        <- iris[,1:4]
+plot(iris4,col=species.name)
+```
+
+```{r}
+i1 <- which(species.name=='setosa')
+i2 <- which(species.name=='versicolor')
+i3 <- which(species.name=='virginica')
+n1 <- length(i1)
+n2 <- length(i2)
+n3 <- length(i3)
+n  <- n1+n2+n3
+
+g  <- length(levels(species.name))
+p  <- 4
+```
+
+How to perform a MANOVA test? instead of using the F-test, we will develop a test based on a "permutationalisation" of the Wilks^[I refer you to the textbook of Applied Statistics for info on this statistic] test.
+Let's compute the permutational test statistic
+
+```{r}
+fit <- manova(as.matrix(iris4) ~ species.name)
+summary.manova(fit,test="Wilks") 
+T0 <- -summary.manova(fit,test="Wilks")$stats[1,2]
+T0
+```
+
+And let's now compute instead the permutational distribution of the test statistic.
+
+```{r}
+set.seed(seed)
+T_stat <- numeric(B)
+
+for(perm in 1:B){
+  # choose random permutation
+  permutation <- sample(1:n)
+  species.name.perm <- species.name[permutation]
+  fit.perm <- manova(as.matrix(iris4) ~ species.name.perm)
+  T_stat[perm] <- -summary.manova(fit.perm,test="Wilks")$stats[1,2]
+}
+```
+
+Let's visualize again the distribution, and the p-value
+
+```{r}
+hist(T_stat,xlim=range(c(T_stat,T0)),breaks=30)
+abline(v=T0,col=3,lwd=2)
+
+plot(ecdf(T_stat),xlim=c(-2,1))
+abline(v=T0,col=3,lwd=4)
+
+# p-value
+p_val <- sum(T_stat>=T0)/B
+p_val
+```
+
+Up to now, everything is fairly easy. The situation gets a bit uglier when more than one factor is involved in the model
+
+## Permutational Two-Way ANOVA
+
+In this case we wan to test the efficiency of a car with different fuels, which are classified by their **producer** or by their **octane** number.
+I want to see what are the meaningful factors in determining the number of kilometers performed with a liter of petrol, interaction included...
+
+This time the data is put in by hand...
+
+```{r}
+km          <- c(18.7, 16.8, 20.1, 22.4, 14.0, 15.2, 22.0, 23.3)
+station     <- factor(c('Esso','Esso','Esso','Esso','Shell','Shell','Shell','Shell'))
+fuel        <- factor(c('95','95','98','98','95','95','98','98'))
+station_fuel<- factor(c('Esso95','Esso95','Esso98','Esso98','Shell95','Shell95','Shell98','Shell98'))
+
+M             <- mean(km)
+Mstation      <- tapply(km,      station, mean)
+Mfuel         <- tapply(km,       fuel, mean)
+Mstation_fuel <- tapply(km, station_fuel, mean)
+```
+
+Let's also plot the data
+
+```{r}
+plot(station_fuel, km, col=rainbow(5)[2:5], ylim=c(0,24))
+```
+
+and, of course, I can do everything in a fully parametric setting...
+
+```{r}
+# Parametric test:
+summary(aov(km ~ station + fuel + station:fuel))
+# Without interaction
+summary.aov(aov(km ~ station + fuel))
+# Without station
+summary.aov(aov(km ~ fuel))
+
+```
+
+**To do everything in a permutational setting, I need to recognize that, actually, the tests that I need to run are more than one!**
+
+The two-way ANOVA model that I want to write is:
+$$
+Km = \mu + \alpha_i + \beta_j + \gamma_{ij} + \epsilon
+$$
+
+So, I need to see if $\gamma=0$, or $\beta=0$ or $\alpha=0$ and, for each of this tests, I have a different permutation scheme.
+
+Let's start with the $H_0:\gamma=0$ vs $H_1:\gamma\neq0$.
+Under the null hypothesis the model reduces to the additive one: $Km = \mu + \alpha_i + \beta_j + \epsilon$, and **permuting the residuals** under this model should yield likelihood-invariant datasets.
+So, let's compute the test statistic
+
+```{r}
+summary.aov(aov(km ~ station + fuel + station:fuel))
+T0_station_fuel <- summary.aov(aov(km ~ station + fuel + station:fuel))[[1]][3,4]
+T0_station_fuel
+
+```
+
+and instead compute the permutational distribution:
+
+```{r}
+aov.H0station_fuel <- aov(km ~ station + fuel)
+aov.H0station_fuel
+residuals.H0station_fuel <- aov.H0station_fuel$residuals
+n = 8
+
+
+T_station_fuel <- numeric(B)
+for(perm in 1:B){
+  permutation <- sample(n)
+  residuals.H0station_fuel <- residuals.H0station_fuel[permutation]
+  km.perm.H0station_fuel <- aov.H0station_fuel$fitted + residuals.H0station_fuel
+  T_station_fuel[perm] <- summary.aov(aov(km.perm.H0station_fuel ~ station + fuel + station:fuel))[[1]][3,4]
+}
+```
+
+And the p-value...
+
+```{r}
+sum(T_station_fuel >= T0_station_fuel)/B
+```
+
+Not significant, meaning that I can reduce the model and then perform my test on my main effects.
+To test $H_0:\beta=0$ vs $H_1:\beta\neq 0$, I am assuming under $H_0$ the following model $Km = \mu + \alpha_i + \epsilon$, while for $H_0:\alpha=0$ vs $H_1:\alpha\neq0$ I am assuming $Km = \mu + \beta_j + \epsilon$
+
+Again, the idea is to permute the residuals under $H_0$, so let's compute them
+
+```{r}
+# Test for station
+T0_station <- summary.aov(aov(km ~ station + fuel))[[1]][1,4]
+# residuals under H0:
+# km = mu + beta*fuel
+aov.H0station <- aov(km ~ fuel)
+residuals.H0station <- aov.H0station$residuals
+
+# Test for fuel
+T0_fuel <- summary.aov(aov(km ~ station + fuel))[[1]][2,4]
+# residuals under H0:
+# km = mu + alpha*station
+aov.H0fuel <- aov(km ~ station)
+residuals.H0fuel <- aov.H0fuel$residuals
+
+```
+
+And let's now compute the permutational distribution, and thus the p-value
+
+```{r}
+# Test both factors in a single loop
+B <- 1000
+T_fuel <- T_station <- numeric(B)
+for(perm in 1:B){
+  permutation <- sample(n)
+  
+  # Test station
+  km.perm.H0station <- aov.H0station$fitted + residuals.H0station[permutation]
+  T_station[perm] <- summary.aov(aov(km.perm.H0station ~ station + fuel))[[1]][1,4]
+  
+  # Test fuel
+  km.perm.H0fuel <- aov.H0fuel$fitted + residuals.H0fuel[permutation]
+  T_fuel[perm] <- summary.aov(aov(km.perm.H0fuel ~ station + fuel))[[1]][2,4]
+}
+```
+
+```{r}
+sum(T_station >= T0_station)/B
+```
+
+```{r}
+sum(T_fuel >= T0_fuel)/B
+```
+
+In histograms
+
+```{r}
+hist(T_station)
+abline(v=T0_station)
+
+hist(T_fuel)
+abline(v=T0_fuel)
+```
+
+I can remove station, so let's go on on testing Fuel... which actually is a one-way ANOVA...
+**It can be shown in this case the residual permutation and the data permutation are the same**...
+
+```{r}
+# TEST ON THE FACTOR FUEL
+T0_fuel <- summary.aov(aov(km ~  fuel))[[1]][1,4]
+# residuals under H0
+# km = mu
+residuals.H0fuel <- km - M
+
+# Note that in this case, permuting the residuals under H0 
+# and permuting the data is exactly the same:
+permutation <- sample(n)
+km.perm.H0fuel <- M + residuals.H0fuel[permutation]
+km.perm        <- km[permutation]
+
+km.perm.H0fuel
+km.perm
+```
+
+```{r}
+T_fuel <- numeric(B)
+for(perm in 1:B){
+  permutation <- sample(n)
+  km.perm <- km[permutation]
+  T_fuel[perm] <- summary.lm(aov(km.perm ~ fuel ))$f[1]
+  
+}
+sum(T_fuel >= T0_fuel)/B
+
+```
+
+## POV: ANOVA is a special case of a linear model.
+Let us take a step back to the full model:
+$$
+Km = \mu + \alpha_i + \beta_j + \gamma_{ij} + \epsilon
+$$
+and look at our first hypothesis.
+Let's start with the $H_0:\gamma=0$ vs $H_1:\gamma\neq0$.
+Under the null hypothesis the model reduces to the additive one: $Km = \mu + \alpha_i + \beta_j + \epsilon$, and **permuting the residuals** under this model should yield likelihood-invariant datasets.
+However, instead of using the $aov$ function, I could use $lm$! And moreover we now have access
+to the adjusted R squared statistic (amongst others!).
+
+```{r}
+station
+```
+
+```{r}
+T0_station_fuel <- summary.lm(lm(km ~ station + fuel + station:fuel))$adj.r.squared
+T0_station_fuel
+
+
+lm.H0station_fuel <- lm(km ~ station + fuel)
+lm.H0station_fuel
+residuals.H0station_fuel <- lm.H0station_fuel$residuals
+n = 8
+
+
+T_station_fuel <- numeric(B)
+for(perm in 1:B){
+  permutation <- sample(n)
+  residuals.H0station_fuel <- residuals.H0station_fuel[permutation]
+  km.perm.H0station_fuel <- lm.H0station_fuel$fitted + residuals.H0station_fuel
+  T_station_fuel[perm] <- summary.lm(lm(km.perm.H0station_fuel ~ station + fuel + station:fuel))$adj.r.squared
+}
+
+sum(T_station_fuel >= T0_station_fuel)/B
+
+
+```
+
+

@@ -38,13 +38,13 @@ We are given data of the week 12/09/2016 -> 18/09/2016 about the number of vehic
 Framed in a more rigorous way, being 
 
 $$
-\mathbf{Y}_{i,w} \overset{iid}{\sim} \mathbf{Y}_{w} \in \mathbb{R}^{48}; \, i \in \{1,...,N\} \& w \in \{1, ..., 5\}
+\mathbf{Y}_{i,w} \overset{iid}{\sim} \mathbf{Y}_{w} \in \mathbb{R}^{48}; \, i \in \{1,...,5\}
 $$ 
-where $w$ denotes the weekday,and $N$ the sample size. We also have:
+where $w$ denotes the distribution of weekdays, and $i$ is the $i$th day of the week. We also have:
 $$
-\mathbf{Y}_{i,\tilde{w}} \overset{iid}{\sim} \mathbf{Y}_{\tilde{w}} \in \mathbb{R}^{48}
+\mathbf{Y}_{i,\tilde{w}} \overset{iid}{\sim} \mathbf{Y}_{\tilde{w}} \in \mathbb{R}^{48} \; i \in \{6,7\}
 $$
-where $\tilde{w}$ is weekend day.
+where $\tilde{w}$ is to denote weekend day.
 We want to test the equality of the two distributions, namely, we want to devise a test of the type:
 $$
 H_0: \mathbf{Y}_{w} \overset{d}{=} \mathbf{Y}_{\tilde{w}}\;vs\;H_1:\mathbf{Y}_{w} \overset{d}{\neq} \mathbf{Y}_{\tilde{w}}
@@ -155,7 +155,7 @@ let's see another case now...
 ## Center of symmetry of one multivariate population 
 
 
-We're still in Milan, but now we want to check if the humidity of summer months is significantly different from the "non-comfort" threshold level of $(65\%)$.
+We're still in Milan, but now we want to check if the humidity of ($4$) summer months is significantly different from the "non-comfort" threshold level of $(65\%)$.
 
 In other words, being ($i$ represents the sample's $i$th datum )
 $$
@@ -164,10 +164,10 @@ $$
 , I want to test
 
 $$
-H_0: \mathbf{Y} = \mathbf{\mu}_{0}\;vs\;H_1:\mathbf{Y}_ \neq \mathbf{\mu}_0
+H_0: \mathbb{E}[\mathbf{Y}] = \mathbf{\mu}_{0}\;vs\;H_1:\mathbb{E}[\mathbf{Y}] \neq \mathbf{\mu}_0
 $$
 Let's read and plot the data also here.
-We will have 4 observations for 7 different years.
+We will have 4 observations ($p=4$) for 7 different year ($n=7$).
 
 ```{r}
 hum = read.csv2('humidity_data/307_Umidita_relativa_2008_2014.csv', header=T)
@@ -241,7 +241,26 @@ Let's now see our last case...
 
 ## Two sample paired multivariate permutation test
 
-In this case, we want to compare the temperature, humidity and wind-speed in 50 different days in Milan and Barcelona
+In this case, we want to compare the temperature, humidity and wind-speed in 50 different days in Milan and Barcelona.
+We deem $X_M$ the r.v. for the quantity of interest for the population of Milan with unknown distribution $F_M$ and $X_B$ with $F_B$ those of Barcelona.
+We have data:
+$$
+\mathbf{x}_i \stackrel{iid}{\sim} F_M; i \in \{1, ..., N\}
+$$
+_et_
+$$
+\mathbf{y}_i \stackrel{iid}{\sim} F_B; i \in \{1, ..., N\}
+$$
+And, very importantly, the observations are paired:
+$$
+(\mathbf{x}_i, \mathbf{y}_i) \stackrel{iid}{\sim} F_M - F_B
+$$
+
+We test:
+$$
+H_0 : \mathbb{E}[X_M-X_B] = \mathbf{0} \, vs. H1: \mathbb{E}[X_M-X_B] \neq \mathbf{0}
+$$
+
 Let's read the data
 ```{r}
 t1 <- read.table('meteo_data/barcellona.txt', header=T)
@@ -331,7 +350,7 @@ p_val
 Now, let's use the Mahalanobis distance, but "forgetting" about the covariance between the values
 
 ```{r}
-T20 <- as.numeric( (diff.mean-delta.0) %*% solve(diag(diag(diff.cov))) %*% (diff.mean-delta.0))
+T20 <- as.numeric( t(diff.mean-delta.0) %*% solve(diag(diag(diff.cov))) %*% (diff.mean-delta.0))
 # Estimating the permutational distribution under H0
 T2 <- numeric(B)
 set.seed(seed)
@@ -408,5 +427,55 @@ p_val
 ```
 
 
+##  Two sample paired multivariate permutation test - an alternative
 
+If you read the _dispensa_ created by Professor Alessia Pini^[Unpublished, _cfr._ the material on Webeep.], you would find an alternative for this test. 
+
+Instead of performing inference on the distribution of 
+$$
+X_M - X_B
+$$
+we treat them "separately", finding likelihood-invariant transformations under $H_0$
+that respect the paired nature of the test.
+We test:
+$$
+H_0: X_M \stackrel{d}{=} X_B \; vs. \;H_1: X_M \stackrel{d}{\neq} X_B
+$$
+And we have $2^N$ different permutations, since the **exchangeability is only within the pairs**.
+We choose as test statistic the norm of the differences of the means of both samples.
+
+
+```{r}
+T20 <- norm(as.matrix(colMeans(t1) - apply(t2, MARGIN=2, FUN=mean)))
+```
+
+
+```{r}
+T2 <- numeric(B)
+p <- dim(t1)[2] # here naturally I can use t1 or t2.
+n <- dim(t2)[1]
+t.full <- rbind(t1, t2)
+set.seed(seed)
+for(perm in 1:B)
+  {
+  # Random permutation
+  # N.B. exchangeability is only within pairs
+  perm.indices.t1 <- seq(1, n) + n * rbinom(n,1, 0.5)
+  t1.perm <- t.full[perm.indices.t1, ]
+  t2.perm <- t.full[-perm.indices.t1,]
+  
+  T2[perm] <- norm(as.matrix(((colMeans(t1.perm)) - colMeans(t2.perm))))
+}
+
+hist(T2,xlim=range(c(T2,T20)),breaks=100)
+abline(v=T20,col=3,lwd=4)
+
+plot(ecdf(T2))
+abline(v=T20,col=3,lwd=4)
+
+
+# p-value
+p_val <- sum(T2>=T20)/B
+p_val
+```
 
