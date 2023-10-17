@@ -28,7 +28,6 @@ background-color: lightblue;
 }
 ```
 
-
 ```{r}
 B = 1e3
 seed = 26111992
@@ -36,14 +35,17 @@ seed = 26111992
 
 ## Permutational ANOVA
 
-Until now, we have seen how to perform basic statistical tests in a nonparametric and, mainly and more importantly, in a permutational framework.
-By going further on this line of thinking, one can perform analysis of variance in a fully permutational (and thus exact...) setting.
-The example we will see today is about a fairly old dataset, appeared on Biometrika in 1948 (!!).
-It is about an experiment over a number of chickens, fed with different feed types, which were weighted by the experimenter.
-You are interested in determining if the feed type has an impact on the chicken weight or not.
+Until now, we have seen how to perform basic statistical tests in a
+nonparametric and, mainly and more importantly, in a permutational
+framework. By going further on this line of thinking, one can perform
+analysis of variance in a fully permutational (and thus exact...)
+setting. The example we will see today is about a fairly old dataset,
+appeared on Biometrika in 1948 (!!). It is about an experiment over a
+number of chickens, fed with different feed types, which were weighted
+by the experimenter. You are interested in determining if the feed type
+has an impact on the chicken weight or not.
 
 Let's import and summarise the dataset
-
 
 ```{r}
 
@@ -52,7 +54,8 @@ attach(chickwts)
 summary(chickwts)
 ```
 
-and, let's try to plot the results, to get a bit of info about what's going on...
+and, let's try to plot the results, to get a bit of info about what's
+going on...
 
 ```{r}
 g <- nlevels(feed)
@@ -62,12 +65,14 @@ n <- dim(chickwts)[1]
 plot(feed, weight, xlab='treat',col=rainbow(g),main='Original Data')
 ```
 
-The null hypothesis that we want to test is that, being $\tau_i, i\in \{1,\ldots6\}$ the generic effect of a given level of the treatment.
-$$
+The null hypothesis that we want to test is that, being
+$\tau_i, i\in \{1,\ldots6\}$ the generic effect of a given level of the
+treatment. $$
 H_0: \tau_i=0\;\forall i\;vs\;H_1:\exists\,\tau_i\neq0 
 $$
 
-Of course we can solve this in a fully parametric (and admittedly not robust...) way
+Of course we can solve this in a fully parametric (and admittedly not
+robust...) way
 
 ```{r}
 fit <- aov(weight ~ feed)
@@ -75,8 +80,9 @@ summary(fit)
 
 ```
 
-The strategy that I use to perform permutational ANOVA is to "permutationalise" the F statistic, by computing its permutational distribution under $H_0$.
-So...
+The strategy that I use to perform permutational ANOVA is to
+"permutationalise" the F statistic, by computing its permutational
+distribution under $H_0$. So...
 
 ```{r}
 T0 <- summary(fit)[[1]][1,4]  # extract the test statistic
@@ -84,7 +90,9 @@ T0
 
 ```
 
-To compute the distribution, one simply "scales up" the one used for the 2-sample t-test: I assign at random the treatments (that, under $H_0$, should all be equal, and equal to 0)
+To compute the distribution, one simply "scales up" the one used for the
+2-sample t-test: I assign at random the treatments (that, under $H_0$,
+should all be equal, and equal to 0)
 
 ```{r}
 T_stat <- numeric(B) 
@@ -102,7 +110,8 @@ for(perm in 1:B){
 
 ```
 
-Let's see the distribution, and then the p-value of the permutational f-test
+Let's see the distribution, and then the p-value of the permutational
+f-test
 
 ```{r}
 hist(T_stat,xlim=range(c(T_stat,T0)),breaks=30)
@@ -146,13 +155,15 @@ lmp=aovp(weight_perm ~ chickwts$feed,perm="Prob",Cp=1e-6)
 summary(lmp)
 
 ```
-One may hypothesise such variance in the obtained p-value is a consequence of the number of iterations. Anyways, **it doesn't really make much sense. Don't use it.**
 
+One may hypothesise such variance in the obtained p-value is a
+consequence of the number of iterations. Anyways, **it doesn't really
+make much sense. Don't use it.**
 
 ## Multivariate Analysis of Variance
 
-The strategy behind the multivariate analysis of variance is admittedly fairly similar.
-We use the Iris dataset
+The strategy behind the multivariate analysis of variance is admittedly
+fairly similar. We use the Iris dataset
 
 ```{r}
 data(iris)
@@ -182,8 +193,12 @@ g  <- length(levels(species.name))
 p  <- 4
 ```
 
-How to perform a MANOVA test? instead of using the F-test, we will develop a test based on a "permutationalisation" of the Wilks^[I refer you to the textbook of Applied Statistics for info on this statistic] test.
+How to perform a MANOVA test? instead of using the F-test, we will
+develop a test based on a "permutationalisation" of the Wilks[^1] test.
 Let's compute the permutational test statistic
+
+[^1]: I refer you to the textbook of Applied Statistics for info on this
+    statistic
 
 ```{r}
 fit <- manova(as.matrix(iris4) ~ species.name)
@@ -192,7 +207,8 @@ T0 <- -summary.manova(fit,test="Wilks")$stats[1,2]
 T0
 ```
 
-And let's now compute instead the permutational distribution of the test statistic.
+And let's now compute instead the permutational distribution of the test
+statistic.
 
 ```{r}
 set.seed(seed)
@@ -221,12 +237,16 @@ p_val <- sum(T_stat>=T0)/B
 p_val
 ```
 
-Up to now, everything is fairly easy. The situation gets a bit uglier when more than one factor is involved in the model
+Up to now, everything is fairly easy. The situation gets a bit uglier
+when more than one factor is involved in the model
 
 ## Permutational Two-Way ANOVA
 
-In this case we wan to test the efficiency of a car with different fuels, which are classified by their **producer** or by their **octane** number.
-I want to see what are the meaningful factors in determining the number of kilometers performed with a liter of petrol, interaction included...
+In this case we wan to test the efficiency of a car with different
+fuels, which are classified by their **producer** or by their **octane**
+number. I want to see what are the meaningful factors in determining the
+number of kilometers performed with a liter of petrol, interaction
+included...
 
 This time the data is put in by hand...
 
@@ -260,40 +280,51 @@ summary.aov(aov(km ~ fuel))
 
 ```
 
-**To do everything in a permutational setting, I need to recognize that, actually, the tests that I need to run are more than one!**
+**To do everything in a permutational setting, I need to recognize that,
+actually, the tests that I need to run are more than one!**
 
-The two-way ANOVA model that I want to write is:
-$$
+The two-way ANOVA full model is: $$
 Km = \mu + \alpha_i + \beta_j + \gamma_{ij} + \epsilon
 $$
 
-So, I need to see if $\gamma=0$, or $\beta=0$ or $\alpha=0$ and, for each of this tests, I have a different permutation scheme.
+So, I need to see if $\gamma=0$, or $\beta=0$ or $\alpha=0$ and, for
+each of this tests, I have a different permutation scheme.
 
-Let's start with the $H_0:\gamma=0$ vs $H_1:\gamma\neq0$.
-Under the null hypothesis the model reduces to the additive one: $Km = \mu + \alpha_i + \beta_j + \epsilon$, and **permuting the residuals** under this model should yield likelihood-invariant datasets.
-So, let's compute the test statistic
+Let's start with the $$
+H_0:\gamma=0 \; vs \; H_1:\gamma\neq0
+$$
+
+Which means that the model under $H_1$ is given by: $$
+Km = \mu + \alpha_i + \beta_j + \gamma_{ij} +  \epsilon
+$$ And under $H_0$: $$
+Km = \mu + \alpha_i + \beta_j + \epsilon
+$$ , and **permuting the residuals** under this model should yield
+likelihood-invariant datasets. So, let's compute the test statistic
 
 ```{r}
-summary.aov(aov(km ~ station + fuel + station:fuel))
-T0_station_fuel <- summary.aov(aov(km ~ station + fuel + station:fuel))[[1]][3,4]
+summary.aov(aov(km ~ station + fuel + station:fuel)) 
+T0_station_fuel <- summary.aov(aov(km ~ station + fuel + station:fuel))[[1]][3,4]  # extract the test statistic
 T0_station_fuel
 
 ```
 
-and instead compute the permutational distribution:
+and compute the permutational distribution. Note that we have to
+**estimate** the residuals which we will permute.
 
 ```{r}
 aov.H0station_fuel <- aov(km ~ station + fuel)
 aov.H0station_fuel
-residuals.H0station_fuel <- aov.H0station_fuel$residuals
+residuals.H0station_fuel <- aov.H0station_fuel$residuals # estimate residuals
 n = 8
 
 
 T_station_fuel <- numeric(B)
 for(perm in 1:B){
   permutation <- sample(n)
+  # permute the residuals
   residuals.H0station_fuel <- residuals.H0station_fuel[permutation]
   km.perm.H0station_fuel <- aov.H0station_fuel$fitted + residuals.H0station_fuel
+  # re-fit full model to calculate statistic
   T_station_fuel[perm] <- summary.aov(aov(km.perm.H0station_fuel ~ station + fuel + station:fuel))[[1]][3,4]
 }
 ```
@@ -304,10 +335,17 @@ And the p-value...
 sum(T_station_fuel >= T0_station_fuel)/B
 ```
 
-Not significant, meaning that I can reduce the model and then perform my test on my main effects.
-To test $H_0:\beta=0$ vs $H_1:\beta\neq 0$, I am assuming under $H_0$ the following model $Km = \mu + \alpha_i + \epsilon$, while for $H_0:\alpha=0$ vs $H_1:\alpha\neq0$ I am assuming $Km = \mu + \beta_j + \epsilon$
+Not significant, meaning that I can reduce the model and then perform my
+test on my main effects.
 
-Again, the idea is to permute the residuals under $H_0$, so let's compute them
+To test $H_0:\beta=0$ vs $H_1:\beta\neq 0$, I am assuming under $H_0$
+the following model $Km = \mu + \alpha_i + \epsilon$, while for
+$H_0:\alpha=0$ vs $H_1:\alpha\neq0$  I am assuming
+$Km = \mu + \beta_j + \epsilon$ under $H_0$. That is, in the next code
+blocks I will perform **two separate tests\**.
+
+Again, the idea is to permute the residuals under $H_0$, so let's
+compute them.
 
 ```{r}
 # Test for station
@@ -326,7 +364,8 @@ residuals.H0fuel <- aov.H0fuel$residuals
 
 ```
 
-And let's now compute the permutational distribution, and thus the p-value
+And let's now compute the permutational distribution, and thus the
+p-value
 
 ```{r}
 # Test both factors in a single loop
@@ -363,15 +402,21 @@ hist(T_fuel)
 abline(v=T0_fuel)
 ```
 
-I can remove station, so let's go on on testing Fuel... which actually is a one-way ANOVA...
-**It can be shown in this case the residual permutation and the data permutation are the same**...
+I can remove station, so let's go on on testing Fuel... which actually
+is a one-way ANOVA... 
+Hence, we have our last hypothesis test: $$
+H_0:  \beta = 0 \implies Km = \mu + \epsilon
+$$ *versus* $$
+H_1:  \beta \neq 0 \implies Km = \mu + \beta_j + \epsilon
+$$ **It can be shown in this case the residual permutation and the data
+permutation are the same**...
 
 ```{r}
 # TEST ON THE FACTOR FUEL
 T0_fuel <- summary.aov(aov(km ~  fuel))[[1]][1,4]
 # residuals under H0
 # km = mu
-residuals.H0fuel <- km - M
+residuals.H0fuel <- km - M  # subtract global mean
 
 # Note that in this case, permuting the residuals under H0 
 # and permuting the data is exactly the same:
@@ -379,8 +424,7 @@ permutation <- sample(n)
 km.perm.H0fuel <- M + residuals.H0fuel[permutation]
 km.perm        <- km[permutation]
 
-km.perm.H0fuel
-km.perm
+all.equal(km.perm.H0fuel, km.perm)
 ```
 
 ```{r}
@@ -396,18 +440,19 @@ sum(T_fuel >= T0_fuel)/B
 ```
 
 ## POV: ANOVA is a special case of a linear model.
-Let us take a step back to the full model:
-$$
+
+Let us take a step back to the full model: $$
 Km = \mu + \alpha_i + \beta_j + \gamma_{ij} + \epsilon
-$$
-and look at our first hypothesis.
-Let's start with the $H_0:\gamma=0$ vs $H_1:\gamma\neq0$.
-Under the null hypothesis the model reduces to the additive one: $Km = \mu + \alpha_i + \beta_j + \epsilon$, and **permuting the residuals** under this model should yield likelihood-invariant datasets.
-However, instead of using the $aov$ function, I could use $lm$! And moreover we now have access
-to the adjusted R squared statistic (amongst others!).
+$$ and look at our first hypothesis. Let's start with the $H_0:\gamma=0$
+vs $H_1:\gamma\neq0$. Under the null hypothesis the model reduces to the
+additive one: $Km = \mu + \alpha_i + \beta_j + \epsilon$, and
+**permuting the residuals** under this model should yield
+likelihood-invariant datasets. However, instead of using the $aov$
+function, I could use $lm$! And moreover we now have access to the
+adjusted R squared statistic (amongst others!).
 
 ```{r}
-station
+typeof(station)  # even if we have names, since it is a factor
 ```
 
 ```{r}
@@ -433,5 +478,3 @@ sum(T_station_fuel >= T0_station_fuel)/B
 
 
 ```
-
-

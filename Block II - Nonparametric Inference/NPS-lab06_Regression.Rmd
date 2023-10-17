@@ -39,7 +39,7 @@ B <- 1e3
 ## Permutation Testing in Regression
 
 We have now seen many applications of permutation testing to various real-world methodological issues... The last one is regression.
-In this case we will work with some simulated data: specifically data generated from a linear model with a heavy-tailed error term
+In this case we will work with some simulated data: specifically data generated from a linear model with a **heavy-tailed error term** (we have seen in **Lab$03$** the effect of heavy tails of a distribution in the _t-test_)
 
 ```{r}
 # covariate values
@@ -64,6 +64,10 @@ plot(x2,Y,pch=16)
 plot(x3,Y,pch=16)
 ```
 
+
+And of course due to the strong collinearity we see visually, we expect the test will be significat for at least one regressor.
+
+
 And, let's see how parametric inference behaves in this case (spoiler alert, badly. Homework: why?)^[If you clicked this footnote, perhaps you were looking for the solution. What was the main message of Lab$03$?]
 
 ```{r}
@@ -79,21 +83,26 @@ reject the normality of the residuals:
 shapiro.test(result$residuals)$p
 qqnorm(result$residuals)
 ```
-A geeky parenthesis. We have seen a sort of nonparametric counterpar to the qqplot, right?
-Let us use it!
-
-```{r}
-n <- length(result$residuals)
-set.seed(1992)
-normal <- as.matrix(rnorm(n, sd=summary.lm(result)$sigma))  # unbiased estimate of residual variance
-
-DepthProc::ddPlot(x = normal,y = as.matrix(as.matrix(result$residuals)),depth_params = list(method='Tukey'))
-```
-Let us go back to regression.
 
 How do I behave in this case, permutationally?
 
-Let's start with a **global test**. In this case my test statistic is:
+Let's start with a **global test**.
+We have:
+$$
+H_0: \beta_1 = \beta_2 = \beta_3 = 0 ; \; \implies y = \beta_0 + \epsilon
+$$
+vs. 
+$$
+\; H_1: \exists \, l \in \{1, ..., L\}, \; s.t. \beta_l \neq0
+$$
+(in this exercise $L=3$).
+My test statistic is the $F$ statistic:
+$$
+T = \frac{SS_{reg}}{SS_{res}}
+$$
+You need not learn this formula by heart. What is important for you to know is that this statistic increases as the Sum of Squares of the reqression w.r.t the sum of squares of the residuals.
+
+An alternative could be the adjusted R-squared statistic (as we saw before you can extract from the summary it after fitting an $lm$ model), which measures the percentage of variability of the dependent variable explained by the model with an adjustment for degrees of freedom^[Again you just have to know it could be a good choice for this scenario. For further details I refer you again to the book of Applied statistics.]
 
 ```{r}
 T0_glob <- summary(result)$f[1]
@@ -101,7 +110,8 @@ T0_glob
 ```
 
 The permutation scheme to use for the global model is basically, to **permute the responses**...
-Basically, if there was no model (i.e. my $H_0$, that every coefficient is 0), it wouldn't matter which input I'm giving, I should expect the same response. So permuting them wouldn't lead to a difference under the null hypothesis:
+Basically, if there was no model (i.e. my $H_0$, that every coefficient is 0), it wouldn't matter which input I'm giving, I should expect the same response (see the last lab for the computational proof). So permuting them wouldn't lead to a difference under the null hypothesis. Indeed, under $H_0$:
+
 
 ```{r}
 T_H0glob <- numeric(B)
@@ -111,17 +121,19 @@ for(perm in 1:B){
   
   Y.perm.glob <- Y[permutation]
   T_H0glob[perm] <- summary(lm(Y.perm.glob ~ x1 + x2 + x3))$f[1]
-  
 }
 
 sum(T_H0glob>=T0_glob)/B
 ```
 
 Ok, the model is significant, let's go ahead with the other tests...
-The three test statistics are...
+The three test statistics are the absolute value of their t_statistic normalised by their standard error:
+$$
+T_l = \bigg |\frac{\hat{\beta}_l}{SE_{\hat{\beta}_l}}\bigg|
+$$
 
 ```{r}
-T0_x1 <- abs(summary(result)$coefficients[2,3])
+T0_x1 <- abs(summary(result)$coefficients[2,3]) # use coefficients[2,1] for the value
 T0_x1
 
 T0_x2 <- abs(summary(result)$coefficients[3,3])
@@ -171,3 +183,64 @@ sum(T_H01>=T0_x1)/B
 sum(T_H02>=T0_x2)/B
 sum(T_H03>=T0_x3)/B
 ```
+I know it seems rather complex because we have to fit the model under $H_1$ to obtain the value of the test statistic, and the model under $H_0$ to estimate residuals and fitted values. So I decided to write cleanly the algorithm to make it clearer.
+
+******
+**Algorithm 1**:  Permutation test algorithm for linear models
+
+******
+1.  Set $H_0$ (smaller model) and $H_1$ (more complex model). _E.g._, 
+$$
+H_1: y_i = \beta_0 + \beta_1 x_{i1} + \epsilon_i
+$$
+$$
+H_0: y_i = \beta_0 + \epsilon_i
+$$
+    where the residuals are of an unknown distibution, but we do assume they are i.i.d with $\mathbb{E}[\epsilon]=0$.
+2. Fit the  full model ($H_1$), and extract the value of test statistic (_e.g._, the $F$ statistic)
+3. Fit the reduced model ($H_0$ )to estimate the residuals, which are exchangeable under $H_0$, as well as fitted values $\hat{y}_i$. 
+4. Run Conditional Monte Carlo simulation to estimate the permutational distribution of the statistic conditional on the sample. For example, we may have in the $k$ iteration, the $k$ permutational sample, and for each $i$:
+$$
+y_i^{(k)} = \hat{y}_i + \epsilon_i^{(k)}
+$$
+Where $\hat{y}_i$ is the fitted value of the reduced model in step ($2$) and $\epsilon_i^{(k)}$ a sample without replacement of the estimated residuals.
+
+5. Compare the value of the statistic in ($2$) with the permutational distribution estimated in ($4$) to yield the p-value.
+
+******
+
+
+## Parenthesis: a possible use of the DDplot
+In Lab $01$ we saw the Depth-Depth plot, which is a Nonparametric explorative visual tool to compare two populations. It is actually a nonparametric generalisation of the qqplot, however:
+* It also works with multivariate data
+* It uses depths that are computed w.r.t the available sample. So we do not compare the empirical depths (which replace the quantiles) with theoretical ones, but with the depths of another sample.
+
+The interpretation is the same as in the qqplot. If we see approximately a straight line, it means that both (empirical) distributions are similar.
+
+Thus, if we wanted to see the e.c.d.f. of the residuals w.r.t a normal one, we would have to build a DD-plot where one sample is the one of the residuals, and the other one of a normal distribution.
+
+(Note that to make them comparable, I sampled from a normal distribution with the same variance as the residuals, which is in turn estimated in the $lm$ object.)
+
+```{r}
+n <- length(result$residuals)
+set.seed(1992)
+normal <- as.matrix(rnorm(n, 
+                          sd=summary.lm(result)$sigma))  # unbiased estimate of residual variance
+
+DepthProc::ddPlot(x = as.matrix(normal), # use as.matrix since ddplot usually receives multivariate data
+                  y = as.matrix(as.matrix(result$residuals)),depth_params = list(method='Tukey'))
+```
+We notice that the points go far away from the $y=x$ line.
+Naturally, if we compared two samples from the same normal distribution, we would have a very high correlation in the depths:
+```{r}
+normal <- as.matrix(rnorm(n, 
+                          sd=summary.lm(result)$sigma))  # unbiased estimate of residual variance
+normal2 <- as.matrix(rnorm(n, 
+                          sd=summary.lm(result)$sigma))
+
+
+DepthProc::ddPlot(x = normal, y = normal2 ,depth_params = list(method='Tukey'))
+```
+And the conclusion we gather from such DD-plot is that the samples are indeed quite likely to be from the same distribution.
+
+

@@ -1,0 +1,179 @@
+---
+title: "Lab 08 - Bootstrap Tests and p-values"
+date: 2023/10/17
+author: "Nonparametric statistics ay 2023/2023"
+output:
+  
+  html_document: 
+    df_print: paged
+  pdf_document: default
+  html_notebook: 
+    df_print: paged
+  word_document: default
+editor_options: 
+  chunk_output_type: inline
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+library(rgl)
+knitr::opts_chunk$set(echo = TRUE)
+knitr::knit_hooks$set(webgl = hook_webgl)
+```
+
+```{css, echo=FALSE}
+.extracode {
+background-color: lightblue;
+}
+```
+
+
+
+```{r}
+print(getwd())
+seed=2781991
+B=1e5
+library(pbapply)
+library(parallel)
+```
+
+## Boostrap tests and Bootstrap P-Values
+
+You have probably already realised how close (but yet quite different) permutational and bootstrap methods are. We have actually seen how to create confidence intervals out of a permutation test... Here we will create a test (and compute p-values!) out of a bootstrap confidence interval.
+
+Recall that when we have a (univariate, multivariate or even functional) sample of underlying **unknown** distribution function $F$ ("real world")
+$$
+\mathcal{X} = x_1, ... , x_N \stackrel{iid}{\sim} F
+$$
+and are interested in the value of a statistic of the population $\theta(F)$ which is unknown. For that, we have sample estimand $\hat{\theta}(\mathcal{X})$. To estimate the sampling distribution of such statistic, we "substitute" $\theta(F)$ by $\hat{\theta}(\hat{F}) = \hat{\theta}(\mathcal{X})$ and $\hat{\theta}(\mathcal{X})$ with
+$\hat{\theta}(\mathcal{X}^*)$
+So we can draw up to $n!$ different Bootstrap samples ( _id est_ samples with replacement) of the type:
+$$
+\mathcal{X}^* = x_1^*, ... , x_N^* \stackrel{iid}{\sim} \hat{F}
+$$
+This could be more easily grasped by the matrioska metaphor (Hall, Peter. The bootstrap and Edgeworth expansion. Springer Science & Business Media, 2013).
+
+The outermost matrioska represents the unknown $F$, and we try to reproduce the relationship between $\hat{F}$ and $F$ (outermost and second-outermost matrioskas)
+by looking ath the second ($\hat{F}$, available by the sample) and third matrioskas (available by sampling with replacement.)
+
+
+![The Bootstrap matrioska.](matrioska_del_bootstrap.png)
+
+
+Let's start by generating some data
+
+```{r}
+set.seed(seed)
+x1=stabledist::rstable(1000,1.8,0)
+
+# Plot data
+hist(x1)
+boxplot(x1, main = 'X1')
+```
+
+We want to perform a test on the median of this distribution, namely 
+$$
+H_0:median(X_1)=0\;vs\;H_1:median(X_1)\neq0
+$$
+Let's start by computing the sample median:
+
+```{r}
+T.obs <- median(x1)
+T.obs
+```
+
+
+Now, we need to compute the bootstrap distribution of the sample median. To do this I will show you an advanced (and parallel...) technique. Let's set up the cluster
+
+```{r}
+cl=makeCluster(parallel::detectCores()/2)
+clusterExport(cl=cl,list('x1'))
+
+
+```
+
+And now, let's directly compute
+
+```{r}
+T.boot=pbreplicate(B,  
+                   median(sample(x1, replace = T)),
+                   cl=cl)
+```
+
+Again, let's observe the distribution
+
+```{r}
+plot(ecdf(T.boot), main='Sample median')
+abline(v = T.obs, lty=2)
+```
+
+And compute the bias, variance, and RMSE
+
+```{r}
+var=var(T.boot)
+var
+bias=mean(T.boot)-T.obs
+bias
+RMSE=sqrt(var+bias^2)
+RMSE
+
+```
+
+We can calculate the reverse percentile intervals from the bootstrap distribution:
+
+```{r}
+
+alpha <- 0.05
+
+right.quantile <- quantile(T.boot, 1 - alpha/2)
+left.quantile  <- quantile(T.boot, alpha/2)
+
+
+
+CI.RP <- c(T.obs - (right.quantile - T.obs), T.obs - (left.quantile - T.obs))
+names(CI.RP)=c('lwr','upr')
+
+plot(ecdf(T.boot), main='Sample median')
+abline(v = T.obs, lty=2)
+abline(v = CI.RP)
+```
+
+How do I compute the p-value of such test? I know that the p-value is the lowest alpha level for which I reject $H_0$. This value can be found via a grid search (that is computationally intensive, I know... but we know how to write fast code in R, don't we?)
+
+```{r}
+alpha_grid=seq(0.001,0.5,by=0.001)
+length(alpha_grid)
+```
+
+Let's compute the list of confidence intervals: I start by creating a function to be iterated...
+
+```{r}
+CI_calc=function(alpha_level){
+  right.quantile <- quantile(T.boot, 1 - alpha_level/2)
+  left.quantile  <- quantile(T.boot, alpha_level/2)
+  out=c(T.obs - (right.quantile - T.obs), T.obs - (left.quantile - T.obs))
+  names(out)=c('lwr','upr')
+  return(out)
+}
+```
+
+
+which I then iterate using lapply
+
+```{r}
+CI_list=pblapply(alpha_grid,CI_calc)
+CI_mat=dplyr::bind_rows(CI_list)
+```
+
+And, I can now check if $0$ is contained in the CI... The values are sorted, so the first one that does not contain $0$ is the first one of the vector...
+
+```{r}
+check=CI_mat[,1]>0 | CI_mat[,2]<0
+(alpha_grid[check])[1]
+```
+
+So, I do not (as expected) reject $H_0$
+
+#### 
+

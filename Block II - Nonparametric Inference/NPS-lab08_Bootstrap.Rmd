@@ -1,0 +1,245 @@
+---
+title: "Lab 08 - Bootstrap inference"
+date: 2023/10/17
+author: "Nonparametric statistics ay 2023/2024"
+output:
+  
+  html_document: 
+    df_print: paged
+  pdf_document: default
+  html_notebook: 
+    df_print: paged
+  word_document: default
+editor_options: 
+  chunk_output_type: inline
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+library(rgl)
+knitr::opts_chunk$set(echo = TRUE)
+knitr::knit_hooks$set(webgl = hook_webgl)
+```
+
+```{css, echo=FALSE}
+.extracode {
+background-color: lightblue;
+}
+```
+
+
+```{r}
+seed=2781991
+B=10000
+library(progress)
+```
+
+
+
+## Bootstrapping and Nonlinear Regression
+
+For our laboratory on Boostrapping, knowing that you've already seen some interesting feats in class, I decided to focus on an area where the impact of non-parametric inferential techniques are really powerful: non-linear regression.
+
+Let's start by loading and displaying some data, regarding the growth of some orange trees (specifically, the diameter of their trunk)
+
+```{r}
+data("Orange")
+Orange
+```
+
+You see that we have a longitudinal dataset, with repeated measurements for 5 different trees. Let's select just one of them
+
+```{r}
+O_3 <- subset(Orange, Orange$Tree == 3)
+attach(O_3)
+# let's have a look at the data
+plot(age, circumference, main = "Circumference of Tree #3",
+  xlab = "Time (days)", ylab = "Circumference")
+```
+
+The temporal evolution of the circumference seems to be relatively well described by a logistic curve... How can I estimate it?
+
+```{r}
+logistic <- function(t, L, k, midpoint) {
+  L/(1 + exp((midpoint - t)/k))
+}
+```
+
+Here $t$ is the independent variable, $L$ is the asymptote parameter, $k$ is the growth rate and $midpoint$ is the point in time when the derivative of the curve is at its maximum level (the peak, if you want an epidemic analogy).
+How do I estimate the parameters $L, k,midpoint$ in such nonlinear relationship? I use `nls`.
+
+```{r}
+model <- nls(circumference ~ logistic(age, L, k, midpoint),
+  start = list(L = 150, k = 500, midpoint = 700)  # initialise variables for optimisation
+  )
+
+summary(model)
+```
+
+Let's plot the estimated curve now: I need to start by generating my predictions on a fine grid
+
+```{r}
+age_fine <- seq(0, 2500)
+circumference_fine <- predict(model, list(age = age_fine))
+```
+
+Then I plot my original points, and I overlay to them the predicted curve
+
+```{r}
+plot(age, circumference, main = "Fitted curve vs data",
+  xlim = c(0, 2500), ylim = c(20, 200))
+lines(age_fine, circumference_fine, col = "red")
+```
+
+What if I want to make inference about these parameters? Either I impose a parametric model on the error term, or, as you expect, I can use the boostrap.
+
+Let's start then by computing the residuals:
+
+```{r}
+fitted.obs <- predict(model)
+res.obs <- circumference - fitted.obs
+```
+
+And, let's start by computing confidence intervals for the asymptote parameter
+
+```{r}
+L.obs <- summary(model)$parameters[1, 1]
+T.boot.L <- numeric(B)
+formula.b <- response.b ~ logistic(age, L, k, midpoint)
+
+pb <- progress_bar$new(
+  format = "  processing [:bar] :percent eta: :eta",
+  total = B,
+  clear = FALSE)
+
+set.seed(seed)
+
+for (b in 1:B) {
+  response.b <- fitted.obs + sample(res.obs, replace = T)
+  fm.b <- nls(formula.b, start = list(L = 150, k = 500, midpoint = 700))
+  sm.b <- summary(fm.b)
+  T.boot.L[b] <- sm.b$parameters[1, 1]
+  pb$tick()
+}
+```
+
+let's now compare the bootstrap distribution of the parameter with the parameter itself...
+```{r}
+hist(T.boot.L, main='Asymptote Bootstrap p.m.f.')
+abline(v=L.obs, lty=2)
+```
+
+```{r}
+plot(ecdf(T.boot.L), main='Asymptote Bootstrap cdf')
+abline(v=L.obs, lty=2)
+```
+
+Using the Bootstrap distribution of the parameter, I can compute without the need of distributional assumptions and/or approximations the standard deviation of the estimate of this parameter.
+
+```{r}
+sd(T.boot.L)
+```
+
+As well as its bias
+
+```{r}
+bias <- mean(T.boot.L) - L.obs
+
+MSE <- var(T.boot.L) + (bias)^2
+
+```
+
+What if I want to compute a confidence interval around the parameter? I can use the classical reverse-percentile approach:
+
+```{r}
+alpha <- 0.05
+right.quantile.L <- quantile(T.boot.L, 1 - alpha/2)
+left.quantile.L <- quantile(T.boot.L, alpha/2)
+
+CI.RP.L <- c(L.obs - (right.quantile.L - L.obs),
+             L.obs,
+             L.obs - (left.quantile.L - L.obs))
+names(CI.RP.L) <- c("lwr", "lvl", "upr")
+CI.RP.L
+```
+
+And, let's visualize them
+
+```{r}
+plot(ecdf(T.boot.L), main = "L")
+abline(v = L.obs, lty = 2)
+abline(v = CI.RP.L)
+
+plot(age, circumference, main = "Fitted curve vs data",
+     xlim = c(0, 2500), ylim = c(20, 200))
+lines(age_fine, circumference_fine, col = "red")
+abline(h = L.obs, lty = 2)
+abline(h = CI.RP.L)
+```
+
+
+#### ANOVA with the Bootstrap
+
+You have already seen the Bootstrap linear regression in the lectures with Prof. Vantini. For the sake of completeness, let us use the  `chickwts` dataset.
+
+```{r}
+attach(chickwts)
+g <- nlevels(feed)
+n <- dim(chickwts)[1]
+
+
+plot(feed, weight, xlab='treat',col=rainbow(g),main='Original Data')
+```
+The null hypothesis that we want to test is that, being
+$\tau_i, i\in \{1,\ldots6\}$ the generic effect of a given level of the
+treatment. 
+
+$$
+H_0: \tau_i=0\;\forall i\;vs\;H_1:\exists\,\tau_i\neq0 
+$$
+And we use the $F$ statistic for the global test:
+```{r}
+fit <- lm(weight ~ feed)
+summary(fit)
+T0 <- summary(fit)$fstatistic[1]  # extract the test statistic
+T0
+
+```
+And now we estimate via M.C. the Bootstrap distribution of such statistic.
+For that, remember we first need to estimate the model under $H_0$ to exchange the residuals. Since the model under $H_0$ is the empty model, whence:
+```{r}
+y.fitted <- mean(weight)
+residuals.H0 <- weight - y.fitted
+```
+
+
+
+```{r}
+T_stat <- numeric(B) 
+n <- dim(chickwts)[1]
+
+for(perm in 1:B){
+  # Permutation:
+  permutation <- sample(1:n, replace = T)
+  residuals.perm <- residuals.H0[permutation]
+  y.perm <- y.fitted + residuals.perm
+  fit_perm <- lm(y.perm ~ feed)
+  
+  # Test statistic:
+  T_stat[perm] <- summary(fit_perm)$fstatistic[1]
+}
+```
+
+```{r}
+hist(T_stat,xlim=range(c(T_stat,T0)),breaks=30,
+     main="Bootstrap distribution of T0 under H_0")
+abline(v=T0,col=3,lwd=2)
+# p-value
+p_val <- sum(T_stat>=T0)/B
+p_val
+```
+
+
+
+

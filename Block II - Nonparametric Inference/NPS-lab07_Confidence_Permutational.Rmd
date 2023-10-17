@@ -1,0 +1,142 @@
+---
+title: "Lab 07 - Permutational Confidence Interval"
+date: 2023/10/17
+author: "Nonparametric statistics ay 2023/2024"
+output:
+  
+  html_document: 
+    df_print: paged
+  pdf_document: default
+  html_notebook: 
+    df_print: paged
+  word_document: default
+editor_options: 
+  chunk_output_type: inline
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+library(rgl)
+knitr::opts_chunk$set(echo = TRUE)
+knitr::knit_hooks$set(webgl = hook_webgl)
+```
+
+```{css, echo=FALSE}
+.extracode {
+background-color: lightblue;
+}
+```
+
+
+```{r}
+seed = 2781991
+B <- 1e3
+```
+
+
+## Permutational Confidence Intervals
+
+Permutation testing (as the name suggests...) was not really born to make confidence intervals for given parameters, but of course, as shown in class, one can **compute exact confidence intervals** for given parameters by **performing test inversion** over a **grid of points** x.
+
+It is relatively **computationally intensive**, thus we need a bit of "smart" code to do it.
+This lab would be indeed more complex from a computational point of view than a statistical one.
+
+Let's simulate some data...
+
+```{r}
+set.seed(seed)
+data=stabledist::rstable(1000,1.5,0)  # distribution with fat tails
+hist(data)
+```
+
+Let's calculate a confidence interval around the median of this distribution, that is...
+
+```{r}
+median(data)
+```
+
+What we need to do is to test over a fine grid of alternative values that contain our true one the alternative hypothesis $H_1:med(X_1) \neq \mu_0$ where $X_1$ the R.V. representing the population I have a sample of.
+
+To do so I use a **one population test on symmetric distributions for the mean**, where my permutation scheme is made of reflections of the data
+
+```{r}
+uni_t_perm <- function(data, mu0, B = 1000) {
+
+  data_trans <- data - mu0
+  T0 <- abs(median(data_trans))
+  T_perm <- numeric(B)
+  n <- length(data)
+
+  for (perm in 1:B) {
+    refl <- rbinom(n, 1, 0.5) * 2 - 1
+    T_perm[perm] <- abs(median(data_trans * refl))
+  }
+
+  return(sum(T_perm >= T0)/B)
+}
+
+```
+
+To have a reasonable spatial resolution we need to have a fine grid on which to perform our tests... which means that we need to run A LOT of tests.
+Observe that for each hypothesised mean (one element in the grid) we will have a test and its corresponding **probability of observing an equally or more extreme value for the test statistic with respect to the permutational distribution under $H_0$ ** (that is, the p-value).
+Hence, we will have a family of hypotheses testing each for a different mean:
+
+$$
+H_{0,s}: MED(X_1) = \mu_s\;\; vs. \;\; H_{1,s}: MED(X_1) \neq \mu_s\; s \in \mathcal{S}
+$$
+where $\mathcal{S}$ represents the set of gridpoints: 
+```{r}
+grid=seq(-3,3,by=0.001)
+length(grid)
+```
+
+How to do it quickly on R? Vectorise operations instead of using for cycles.
+How to do it even faster? Parallelise such vectorised operations!
+
+Let's read the needed packages
+
+```{r}
+library(pbapply)
+library(parallel)
+```
+
+Let's create the cluster and initialize it.
+I need to start by understanding how many (logical...) cores my machine has.
+In my case I have...
+
+```{r}
+n_cores <- detectCores()
+n_cores
+```
+
+So, let's create a cluster with `n_cores` cores!
+
+```{r}
+cl = makeCluster(n_cores)
+```
+
+I also need to "initialise" my cluster by sending information that are useful for the computation.
+
+```{r}
+clusterExport(cl,varlist=list("data","uni_t_perm"))
+```
+
+Now, I need to wrap up my function in a "wrapper" with the required arguments, and then start my parallel calculation!
+
+```{r}
+perm_wrapper <- function(grid_point) {
+  uni_t_perm(data, grid_point, B = 2000)  # run a permutational t test where the hypothesised mean is the grid_point
+}
+
+pval_function <- pbsapply(grid, perm_wrapper, cl = cl)
+```
+
+```{r}
+alpha <- 0.05  # set the significance level
+plot(grid, pval_function, type = "l")  # plot p-value function
+values.within.CI <- grid[pval_function > alpha]
+CI <- range(values.within.CI)  # obtain the confidence interval
+abline(v=CI[1], col="red")
+abline(v=CI[2], col="red")
+```
