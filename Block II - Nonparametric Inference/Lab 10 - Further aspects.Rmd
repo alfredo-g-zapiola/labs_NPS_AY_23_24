@@ -1,0 +1,625 @@
+---
+title: 'Bootstrap & Permutational Inference: further aspects'
+output: html_document
+date: "2023-10-19"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache = TRUE)
+```
+The aim of this lab is to make an integration of what we have seen so far - and also explore some aspects that are easier to see after the aprehension of what we have studied before.
+
+### Independence test: univariate data
+
+The remaining test you have seen in class and not yet in these exercise sessions is the independence test.
+
+Say we have a dataset of univariate paired observations $(x_1, y_1), ..., (x_n, y_n) \sim (X,Y)$ where the r.v.s $X$ _et_ $Y$ are assumed to be continuous.
+We want to test:
+$$
+H_0: X \perp \!\!\! \perp Y \; vs. \; H_1: X \not\!\perp\!\!\!\perp Y
+$$
+_id est_, under $H_0$ they are independent.
+Of course we do not assume the distribution functions to be from any particular distribution function (such as the normal), we we can adopt a Permutational or Bootstrap approach.
+
+The first step is to choose the test statistic. In this setting, the r-squared statistic $\rho^2$ is common practice (if you think about it, this is a simple regression).
+
+Let us obtain the paired sample from two (nonnormal) distributions. 
+And yes, we can youse the package `roahd` for this... you will see.
+```{r}
+B <- 1e3
+ALPHA = .05
+SEED <- 707
+# same as Lab03
+library(roahd)
+n <- 20
+P <- 101
+grid <-  seq( 0, 1, length.out =  P)
+alpha <-  .1
+beta <-  100
+C_st <- exp_cov_function( grid, alpha, beta )
+
+m1 <- sin(pi*grid)+sin(2*pi*grid)
+
+set.seed(SEED)
+data.m1 <- generate_gauss_fdata(N = n,centerline = m1,Cov=C_st)
+
+f_data <- fData(grid,data.m1)
+plot(f_data, main="Functional dataset, n=20")
+```
+
+
+Now, if for each of the $n=20$ functional data I took their values in **only two elements of the domain** (instead of at different values between $0$ and $1$) I would _ipso facto_ have the necessary data for the test. Indeed,
+```{r}
+data.m1.paired.univariate <- data.m1[,1:2]
+data.m1.paired.univariate
+```
+That is, we only have the observations at the first two grid points of the function.
+Now, we can jump directly to the independent test for **two paired univariate populations**. We will exploit the Permutational approach since it provides exactness.
+
+Firstly, as always, we have the value of the test statistic on the original sample(s)
+```{r}
+T0 <- cor(data.m1.paired.univariate[,1], data.m1.paired.univariate[,2])**2
+T0
+```
+Note that we would get the same value with a linear regression:
+```{r}
+lm.fit <- lm(data.m1.paired.univariate[,1] ~ data.m1.paired.univariate[,2])
+summary(lm.fit) # look at Multiple R-squared
+```
+Now the permutational scheme for this test is _sui generis_: we can permute values of $X$ and of $Y$ separately, giving $n!n!$ different permutations.
+
+```{r}
+# have easier names
+x <- data.m1.paired.univariate[,1] 
+y <- data.m1.paired.univariate[,2]
+
+Tvec <- NULL
+set.seed(SEED)
+for (k in 1:B){
+  x.perm <- sample(x, replace=F)
+  y.perm <- sample(y, replace=F)
+  
+  r.sq.perm <- summary(lm(y.perm ~ x.perm))$r.squared
+  
+  Tvec <- c(Tvec, r.sq.perm)
+}
+
+hist(Tvec)
+abline(v=T0, col="pink")
+sum(Tvec>=T0)/B < ALPHA
+```
+And we reject $H_0$. Of course it makes sense, since we have an exponential covariance function, and even if the correlation is "weak", if we take two adjacent points in the grid, it makes sense that their values are correlated.
+
+
+### Independence test: multivariate data
+
+Here is something you have not seen at class. Naturally, when dealing with two univariate vectors, obtaining Pearson's correlation squared (or a linear regression between them) is easy.
+
+But what if we had that each $\mathbf{x}_i$ and each $\mathbf{y}_i$ were a $p$-variate vector?
+
+A possible solution lies in what we saw in the first Block of this course: depth measures.
+We can extract a depth (which is of course a scalar) for each datum of the sample, even if it is multi-dimensional. And then, we simply compute Pearson's correlation on the depths (a sort of multivariate extension of rank, but of course not the same thing).
+
+Let us have the data set: we take arbitrarily the first two observations for each functional datum (meaning its values at the first two points of the grid) and the fourth and fifth dimension:
+
+```{r}
+x.bivar <- data.m1[, c(1,2)]
+y.bivar <- data.m1[, c(4,5)]
+
+cbind(x.bivar,y.bivar)
+```
+Now, for the same hypothesis test as before, we use the following test statistic:
+$$
+T := \hat{\rho}_P({D}(., \hat{F}_x),\; D(., \hat{F}_y))
+$$
+where $\hat{\rho}_P$ is Pearson's correlation estimate; $D(., \hat{F}_x)$ a vector with the values of the depth of each statistical unitwith respect to the empirical distribution function of the sample of $\mathbf{X}$ and analogously for $\mathbf{Y}$. Naturally, the depth can be the `Mahalanobis`, `Tukey`, _et cetera_.
+```{r}
+depths.x <- DepthProc::depth(u=x.bivar, method="Tukey")
+depths.y <- DepthProc::depth(u=y.bivar, method="Tukey")
+cbind(depths.x, depths.y)
+```
+Note that now we have the same scenario as before: paired **univariate** observations, but instead of the measurements we have the depths we built from the multivariate data.
+
+We now compute:
+```{r}
+T0 <- cor(depths.x, depths.y)**2
+T0
+```
+And now the MC approximation of the permutational distribution conditional on the sample, just as before:
+```{r}
+Tvec <- NULL
+set.seed(SEED)
+for (k in 1:B){
+  depths.x.perm <- sample(depths.x, replace=F)
+  depths.y.perm <- sample(depths.y, replace=F)
+  
+  r.sq.perm <- cor(depths.x.perm, depths.y.perm)**2
+  
+  Tvec <- c(Tvec, r.sq.perm)
+}
+
+hist(Tvec)
+abline(v=T0, col="pink")
+sum(Tvec>=T0)/B < ALPHA
+
+```
+And we do not reject $H_0$... does it make sense?
+
+Let us explore visually the dataset:
+```{r}
+indices.obs <- c(1, 2, 4, 5) # the ones we used for x and y
+
+f_data <- fData(grid[indices.obs], data.m1[, indices.obs])
+plot(f_data)
+abline(v=grid[indices.obs]) # points where take the values to produce x and y bivariate samples.
+```
+
+### Independence test: functional data
+
+Of course, we can perform the previous test for $p$ much higher than $2$, even when the dimensionality is infinity! That is, with functional data.
+
+We shall rephrase the test so that the notation is adapted to functional data, but of course the essence of the independence test is the same.
+
+We denote with $X(t)$ and $Y(t)$ as two stochastic processes taking real values, with $t \in [0,1]$ w.l.o.g. That is, each realisation is a function defined on the dominion $[0,1]$ and takes real values.
+
+We are interested to test whether:
+$$
+H_0: X(t) \perp \!\!\! \perp Y(t) \; vs. \; H_1: X(t) \not\!\perp\!\!\!\perp Y(t)
+$$
+The available dataset are $n$ functions of each stochastic process, meaning:
+$$
+\big(x_1(t), y_1(t) \big), ..., \big(x_n(t), y_n(t) \big)  \stackrel{iid}{\sim} (X(t),Y(t))
+$$
+whence we can see we have a data set of functions.
+
+```{r}
+m1 <- sin(pi*grid)+sin(2*pi*grid)
+m2 <- 2*sin(pi*grid)
+
+set.seed(SEED)
+data.m1 <- generate_gauss_fdata(N = n,centerline = m1,Cov=C_st)
+data.m2 <- generate_gauss_fdata(N = n,centerline = m2,Cov=C_st)
+
+f_data <- fData(grid,data.m1)
+f_data2 <- fData(grid, data.m2)
+plot(f_data, main="Samples of X_1 and X_2", col="blue")
+plot(f_data2, add=T, col="yellow")
+```
+
+The approach for the independence test is very similar to the case with multivariate data, but we use a functional rank (such as **Modified Epigraph Depth**) which maps a function into a scalar for each statistical unit, where the scalar is the rank.
+
+```{r}
+ranks.func.x <- roahd::MEI(Data = f_data)
+ranks.func.y <- roahd::MEI(Data = f_data2)
+cbind(ranks.func.x, ranks.func.y)
+
+```
+From which we can easily apply Spearman's correlation squared:
+```{r}
+T0 <- cor(ranks.func.x, ranks.func.y)**2
+T0
+```
+
+```{r}
+Tvec <- NULL
+set.seed(SEED)
+for (k in 1:B){
+  depths.func.x.perm <- sample(ranks.func.x, replace=F)
+  depths.func.y.perm <- sample(ranks.func.y, replace=F)
+  
+  r.sq.perm <- cor(depths.func.x.perm, depths.func.y.perm)**2
+  
+  Tvec <- c(Tvec, r.sq.perm)
+}
+
+hist(Tvec)
+abline(v=T0, col="pink")
+sum(Tvec>=T0)/B
+```
+and we reject $H_0$
+Note that $X(t)$ could be a multivariate stochastic process... the procedure would be the same we would just use a depth measure for multivariate functional data (available also in `roahd`!).
+
+
+
+
+# Part II: on Monte Carlo estimation 
+
+## MC for Permutation tests
+
+The usual loops of $B$ iterations are nothing but a Monte Carlo algorithm we utilise to estimate the Permutational distribution of a statistic (_e.g._ the sample mean). But what happens if we increase $B$? We will have the MC convergence...
+
+Let us reuse the data of the univariate independence test. We will see what the estimated p-value is by changing the number of MC iterations (recall that the maximum number of different permutations in this case is $n! n!$ )
+
+What happens if we change $B$? Let us run say an MC simulation that estimates the p-value with the Permutational distribution of the statistic.
+
+Moreover, let us increase $B$ to see what we get. That is, we run $B_1$ iterations of permuting, see the value, and then run more iterations until the total is $B_2$, re-compute the value with all the iterations available up until that moment, and so on and so forth.
+
+```{r}
+B.vec <- c(100, 500, 1e3, 2e3, 1e4, 5e4, 1e5)
+
+x <- data.m1.paired.univariate[,1] 
+y <- data.m1.paired.univariate[,2]
+
+T0 <- cor(x, y)**2
+pvals.B <- NULL
+for (B in B.vec){
+  set.seed(SEED) # always the same seed for continuity
+  T.perm <- NULL
+  for (b in 1:B){
+     x.perm <- sample(x, replace=F)
+     y.perm <- sample(y, replace=F)
+     r.sq.perm <- cor(x.perm, y.perm)**2
+     T.perm <- c(T.perm, r.sq.perm)
+  }
+  
+  pvals.B <- c(pvals.B, sum(T.perm>=T0)/B)
+  
+}
+plot(x=log10(B.vec), y=pvals.B, type="b")
+abline(h=pvals.B[length(pvals.B)])
+  
+```
+
+And let us re-do it for different seeds. So the Bootstrap distribution we are estimating will be the same but the actual "history of resamples" we do are different.
+```{r}
+df.perm <- data.frame(matrix(nrow=length(B.vec), ncol=3))
+
+for (k in 1:3){
+  T0 <- cor(x, y)**2
+  pvals.B <- NULL
+  for (B in B.vec){
+    set.seed(k) # we now set k
+    T.perm <- NULL
+    for (b in 1:B){
+       x.perm <- sample(x, replace=F)
+       y.perm <- sample(y, replace=F)
+       r.sq.perm <- cor(x.perm, y.perm)**2
+       T.perm <- c(T.perm, r.sq.perm)
+    }
+    
+    pvals.B <- c(pvals.B, sum(T.perm>=T0)/B)
+  }
+  df.perm[,k] <- pvals.B
+}
+```
+
+```{r}
+row.names(df.perm) <- log10(B.vec)
+matplot(df.perm, type="b", main="MC estimation of the perm p value", 
+        xlab="log B", ylab="P-value")
+abline(h=df.perm[,1][length(B.vec)])
+```
+
+And **in the permutational case** that p-value is exact.
+
+
+## MC for the Bootstrap
+
+Up until now, you have seen the Bootstrap convergence: (and here I am copy-pasting Prof. Vantini's code):
+```{r}
+# Real distribution and Bootstrap distribution of the Sample Mean
+set.seed(SEED)
+n.grid  <- 2^(1:8)
+M <- 10000
+B <- 1000
+x.obs.long <- runif(max(n.grid),0,4)
+
+par(mfrow = c(2,4))
+for(n in n.grid)
+{
+  T.real <- numeric(M)
+  for(m in 1:M)
+  {
+    x.unif <- runif(n,0,4)
+    T.real[m] <- mean(x.unif)
+  }
+  # the sample from which we resample
+  x.obs <- x.obs.long[1:n]
+  T.boot <- numeric(B)
+  for(b in 1:B)
+  {
+    x.b <- sample(x.obs, replace = T)
+    T.boot[b] <- mean(x.b)
+  }
+  
+  plot(ecdf(T.real), main=paste('Sample mean: n =', n), col='red')
+  lines(ecdf(T.boot), col='black')
+}
+```
+
+So we observe that as $n \rightarrow +\infty$, the Bootstrap distribution (_i.e._ the distribution we get by resampling **conditional** on a fixed sample) of the statistic converges to the true distribution of the statistic.
+
+Let us fix the sample (and thus also $n$)
+```{r}
+n <- 2**5
+x.obs <- x.obs.long[1:n]
+```
+
+
+We can visualise as well the MC convergence with different seeds to the
+In this case, we are plotting the mean of the (estimated via MC) Bootstrap distribution of the statistic (which in this case is the mean, but could be a quantile, a p-value, a median, _et cetera_)
+
+Note that the Bootstrap distribution we are estimating is the one **conditional on the fixed sample**.
+
+```{r}
+df.boot <- data.frame(matrix(nrow=length(B.vec), ncol=5))
+
+for (k in 1:5){
+  T.B <- NULL
+  for (B in B.vec){
+    set.seed(k) # always the same seed for continuity
+    T.boot <- numeric(B)
+    for (b in 1:B){
+      x.b <- sample(x.obs, replace = T)
+      T.boot[b] <- mean(x.b)
+    }
+    T.B <- c(T.B, mean(T.boot))
+  }
+  df.boot[,k] <- T.B
+}
+
+```
+
+```{r}
+row.names(df.boot) <- log10(B.vec)
+matplot(df.boot, type="b", main="MC estimation of the mean of boot distrib", 
+        xlab="log B", ylab="Mean of estimated Boot distrib")
+abline(h=df.boot[,1][length(B.vec)])
+```
+
+
+Hold on... even if we estimate perfectly the Bootstrap distribution, we still have an error. We know that the actual mean of the distribution is $2$, not $1.865$...
+this is due to the **Bootstrap error**, which vanishes as $n \rightarrow +\infty$, as we saw with Prof. Vantini's code.
+
+Let us keep the fix seed, variate $B$ and also the observed sample, which is the one that **induces the Bootstrap distribution**. 
+
+We will see that as $B$ increases, the MC estimation converges, but to the Bootstrap estimate, which may differ from the true value using the population distribution.
+
+```{r}
+# two different samples (which will have two different Bootstrap distribs)
+set.seed(20)
+x.obs.1 <- runif(n,0,4)
+x.obs.2 <- runif(n,0,4)
+
+df.boot <- data.frame(matrix(nrow=length(B.vec), ncol=4))
+
+for (k in 1:4){
+  x.obs <- ifelse(k<=2, x.obs.1, x.obs.2 )
+  T.B <- NULL
+  for (B in B.vec){
+    set.seed(k) # always the same seed for continuity
+    T.boot <- numeric(B)
+    for (b in 1:B){
+      x.b <- sample(x.obs, replace = T)
+      T.boot[b] <- mean(x.b)
+    }
+    T.B <- c(T.B, mean(T.boot))
+  }
+  df.boot[,k] <- T.B
+}
+
+```
+```{r}
+row.names(df.boot) <- log10(B.vec)
+matplot(df.boot, type="b", main="MC estimation of the mean of 2 boot distribs", 
+        xlab="log B", ylab="Mean of estimated Boot distribs")
+abline(h=df.boot[,1][length(B.vec)], col="green")
+abline(h=df.boot[,3][length(B.vec)], col="green")
+abline(h=2, col="red", lty=1)
+```
+
+## Bootstrap t intervals 
+
+In the previous lab, we saw reverse percentile intervals with the Bootstrap. Let us compute Bootstrap-t intervals for the mean.
+
+We can generalise a univariate random variable as if it were a stochastic process, where the "dominion" or family of random variables is a singleton.
+$$
+X(s) , \; s \in \mathcal{S}
+$$
+where for univariate data:
+$$
+\mathcal{S} = \{1\}
+$$
+$p$-variate data
+$$
+\mathcal{S} = \{1, ..., p\}
+$$
+and for functional data, w.l.o.g:
+$$
+\mathcal{S} = [0,1]
+$$
+
+Let us start with univariate data. 
+
+```{r}
+n <- 32
+m1 <- sin(pi*grid)+sin(2*pi*grid)
+func.data.sample <- generate_gauss_fdata(n, centerline=m1, Cov=C_st)
+x.univar <- func.data.sample[,1]
+```
+We are interested in a Bootstrap-t interval for $\mathbb{E}[X(t_1)]=\mu(t_1)$. So by applying the Bootstrap principle, we will the t-statistic 
+$$
+ t(s_1) = \frac{\hat{\mu}(s_1)-\mu(s_1)}{\hat{\sigma}(s_1)}
+$$
+by its "Bootstrap world estimate"
+$$
+ t^*(s_1) = \frac{\hat{\mu}^*(s_1)-\hat{\mu}(s_1)}{\hat{\sigma}^*(s_1)}
+
+$$
+So we first estimate through MC the Bootstrap distribution $t^*(s_1)$:
+```{r}
+B <- 1e3
+mu.hat <- mean(x.univar)
+sigma.hat <- sd(x.univar)
+
+set.seed(SEED)
+t.boot <- as.numeric(B)
+for (b in 1:B){
+  x.boot <- sample(x.univar, replace=T)
+  mu.boot <- mean(x.boot)
+  sigma.boot <- sd(x.boot)
+  
+  t.boot[b] <- (mu.boot - mu.hat) / sigma.boot
+}
+hist(t.boot)
+abline(v=0, col="pink", cex=2)
+```
+
+
+
+once we have the estimation of the Bootstrap distribution of the t statistic at $s_1$, _i.e._ of $t^*(s_1)$, we can compute the confidence interval for the mean. Denoting $\hat{q}_{\alpha/2}(s_1)$ and $1-\hat{q}_{\alpha/2}(s_1)$ the quantiles of $t^*(s_1)$:
+
+$$
+1- \alpha = \mathbb{P}[\hat{q}_{\alpha/2}(s_1) < t^*(s_1) < \hat{q}_{1-\alpha/2}(s_1)]
+$$
+which by the Bootstrap principle approximates:
+$$
+\approx \mathbb{P}[\hat{q}_{\alpha/2}(s_1) < t(s_1) < \hat{q}_{1-\alpha/2}(s_1)]
+$$
+We substitute by the definition:
+$$
+= \mathbb{P}[\hat{q}_{\alpha/2}(s_1) < \frac{\hat{\mu}(s_1)-\mu(s_1)}{\hat{\sigma}(s_1)} < \hat{q}_{1-\alpha/2}(s_1)]
+$$
+$$
+= \mathbb{P}[\hat{q}_{\alpha/2}(s_1)\hat{\sigma}(s_1) <{\hat{\mu}(s_1)-\mu(s_1)} < \hat{q}_{1-\alpha/2}(s_1)\hat{\sigma}(s_1)]
+$$
+$$
+= \mathbb{P}[\hat{q}_{\alpha/2}(s_1)\hat{\sigma}(s_1) - \hat{\mu}(s_1) < -\mu(s_1) < \hat{q}_{1-\alpha/2}(s_1)\hat{\sigma}(s_1) - \hat{\mu}(s_1)]
+$$
+and switching the sign:
+$$
+= \mathbb{P}[ \hat{\mu}(s_1) - \hat{q}_{\alpha/2}(s_1)\hat{\sigma}(s_1) > \mu(s_1) > \hat{\mu}(s_1) - \hat{q}_{1-\alpha/2}(s_1)\hat{\sigma}(s_1)]
+$$
+that is, the quantiles are "reversed".
+
+Since we already have the MC estimate of the Bootstrap distribution $t^*(s_1)$, we just compute the quantiles and build the C.I.:
+
+```{r}
+q.low <- quantile(t.boot, ALPHA/2)
+q.up <- quantile(t.boot, 1-ALPHA/2)
+CI <- c(lower=mu.hat - q.up * sigma.hat,
+        point=mu.hat,
+        upper=mu.hat - q.low * sigma.hat)
+CI
+```
+which includes the true mean
+```{r}
+m1[1]
+```
+
+Now, we can also build a **one-at-a-time** CI for multivariate and functional data.
+We say one-at-a-time because they are valid 
+```{r}
+B <- 1e3
+mu.hat <- colMeans(func.data.sample) #point-wise mean
+sigma.hat <- apply(func.data.sample, MARGIN=2, FUN=sd)
+
+set.seed(SEED)
+t.boot <- matrix(nrow=B, ncol=length(grid))
+for (b in 1:B){
+  boot.indices <- sample(1:n, replace=T)
+  boot.sample <- func.data.sample[boot.indices,]
+
+    mu.boot <- colMeans(boot.sample) 
+    sigma.boot <- apply(boot.sample, MARGIN=2, FUN=sd)
+  
+  t.boot[b,] <- (mu.boot - mu.hat) / sigma.boot # the Bootstrapped sigma
+}
+
+# let us visualise the first three point-wise bootstrap distribitutions for t*
+
+boxplot(rbind(t.boot[,1], t.boot[,2], t.boot[,3]) ~ (rbind(rep(1,B), rep(2,B),rep(3,B))))
+lines(m1[1:3], col="pink")
+```
+
+
+
+Now, let us calculate and plot the pointwise confidence intervals!
+```{r}
+q.s.low <- apply(t.boot, MARGIN=2, FUN=quantile, probs=ALPHA/2)
+q.s.up <- apply(t.boot, MARGIN=2, FUN=quantile, probs=1-ALPHA/2)
+
+lower.s <- mu.hat - q.s.up * sigma.hat
+upper.s <- mu.hat - q.s.low * sigma.hat
+
+matplot(y = cbind(lower.s, upper.s), type="b",
+          pch = c(2,2), col=c(14,14), lty = c(3,3),
+          main = "Pointwise Bootstrap-t interval")
+lines(m1, type="l", lty = 4)
+lines(mu.hat, type="b", col="green")
+```
+
+Note that these confidence intervals are point-wise, meaning they are **not simultaneous**.
+This means that if we were to do inference on the mean function $\mu(s)$, we would **NOT** build the bands this way, but with a procedure to control **family-wise error rate** (where of course the whole family is denoted by $\mathcal{S}$).
+
+Hence, even if we are using the same MC to obtain the CI for every dimension, the CI is valid for inference of the value of $X(s)$ only **ONE AT A TIME**.
+
+You will see later with Prof. Vantini what the methodology to make simultaneous inference is.
+
+
+### Permutation tests for functional data: unadjusted p-value function
+
+Suppose now we also have a family of hypothesis tests:
+
+$$
+H_{0,s} = \mathbb{E}[X(s)] = \mu(s)\; vs. \; H_{1,s} : \mathbb{E}[X(s)] \neq \mu(s); \; s \in \mathcal{S}
+$$
+where again $X(s)$
+By fixing $s$, we have a typical univariate permutation test for a hypothesised mean. So let us compute with the same loop all the different p-values of the different tests (one for each $s \in \mathcal{S}$), in an analogos way to what we did with the Bootstrap.
+We take 
+$$\mu(s) = 0.63, \forall s \in \mathcal{S}$$
+And compute the point-wise test statistic:
+$$
+T(s) = |\hat{\mu}(s) - \mu(s) |\; \forall s \in \mathcal{S}
+$$
+where $\hat{\mu}(s)$ is the sample mean at $s$.
+```{r}
+mu.H0 <- 0.063
+T0s <- abs(apply(func.data.sample, MARGIN=2, FUN=mean) - mu.H0)
+```
+And now we estimate the permutational distribution conditional on sample `func.data.sample` at point $s$
+
+1. Estimate permutational distribution of the test statistic at each $s$
+2. Compute p-value of every test $s \in \mathcal{S}$
+
+```{r}
+T.s.B = matrix(nrow=B, ncol=length(grid)) 
+n <- dim(func.data.sample)[1]
+p <- dim(func.data.sample)[2]
+
+set.seed(SEED)
+for(b in 1:B){
+
+  # Permuted dataset (reflection-based)
+  signs.perm = rbinom(n, 1, 0.5)*2 - 1
+  
+  func.perm = mu.H0 + (func.data.sample - mu.H0) * matrix(signs.perm, nrow=n,ncol=p,byrow=FALSE)
+  
+  
+  T.s.B[b, ]  = apply(func.perm, MARGIN=2, FUN=function(x) abs(mean(x)-mu.H0) )
+}
+# compute element-wise p-values
+p.vals <- sapply(1:p, function(i) sum(T.s.B[,i]>=T0s[i])/B )
+
+```
+So let us plot firstly the functional dataset with the hypothesised mean:
+```{r}
+matplot(t(func.data.sample), type="l", col="black")
+lines(m1, col="red")
+lines(apply(func.data.sample, MARGIN=2, FUN=mean), col="turquoise")
+lines(rep(mu.H0, P), col="green")
+```
+
+And now the **unadjasted** p-value function:
+```{r}
+plot(x=grid, y=p.vals, type="l", main="Unadjasted p-value function")
+```
+
+
+
+
+
+
+
+
