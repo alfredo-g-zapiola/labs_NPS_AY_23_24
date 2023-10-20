@@ -1742,9 +1742,9 @@ The three test statistics are the absolute value of their t_statistic
 normalised by their standard error: <span class="math display">\[
 T_l = \bigg |\frac{\hat{\beta}_l}{SE_{\hat{\beta}_l}}\bigg|
 \]</span></p>
-<pre class="r"><code>T0_x1 &lt;- abs(summary(result)$coefficients[2,3]) # use coefficients[2,1] for the value
+<pre class="r"><code>T0_x1 &lt;- abs(summary(result)$coefficients[2,1]) # use coefficients[2,1] for the value
 T0_x1</code></pre>
-<pre><code>## [1] 4.443953</code></pre>
+<pre><code>## [1] 2.926767</code></pre>
 <pre class="r"><code>T0_x2 &lt;- abs(summary(result)$coefficients[3,3])
 T0_x2</code></pre>
 <pre><code>## [1] 2.209965</code></pre>
@@ -1781,7 +1781,7 @@ for(perm in 1:B){
 }
 
 sum(T_H01&gt;=T0_x1)/B</code></pre>
-<pre><code>## [1] 0.001</code></pre>
+<pre><code>## [1] 0.008</code></pre>
 <pre class="r"><code>sum(T_H02&gt;=T0_x2)/B</code></pre>
 <pre><code>## [1] 0.016</code></pre>
 <pre class="r"><code>sum(T_H03&gt;=T0_x3)/B</code></pre>
@@ -1816,9 +1816,11 @@ sample, and for each <span class="math inline">\(i\)</span>: <span class="math d
 y_i^{(k)} = \hat{y}_i + \epsilon_i^{(k)}
 \]</span> Where <span class="math inline">\(\hat{y}_i\)</span> is the
 fitted value of the reduced model in step (<span class="math inline">\(2\)</span>) and <span class="math inline">\(\epsilon_i^{(k)}\)</span> a sample without
-replacement of the estimated residuals.</p></li>
+replacement of the estimated residuals. With such dependent variable, we
+fit the full model ( <em>i.e.</em> the model under <span class="math inline">\(H_1\)</span>) and extract <span class="math inline">\(T^{(k)}\)</span>, the value of the test statistic
+in the <span class="math inline">\(k\)</span>th iteration )</p></li>
 <li><p>Compare the value of the statistic in (<span class="math inline">\(2\)</span>) with the permutational distribution
-estimated in (<span class="math inline">\(4\)</span>) to yield the
+estimated in (<span class="math inline">\(4\)</span>) of <span class="math inline">\(T^{(k)}, \; k \in \mathcal{K}\)</span>to yield the
 p-value.</p></li>
 </ol>
 <hr />

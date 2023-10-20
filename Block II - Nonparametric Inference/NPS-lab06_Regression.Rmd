@@ -133,7 +133,7 @@ T_l = \bigg |\frac{\hat{\beta}_l}{SE_{\hat{\beta}_l}}\bigg|
 $$
 
 ```{r}
-T0_x1 <- abs(summary(result)$coefficients[2,3]) # use coefficients[2,1] for the value
+T0_x1 <- abs(summary(result)$coefficients[2,1]) # use coefficients[2,1] for the value
 T0_x1
 
 T0_x2 <- abs(summary(result)$coefficients[3,3])
@@ -203,9 +203,9 @@ $$
 $$
 y_i^{(k)} = \hat{y}_i + \epsilon_i^{(k)}
 $$
-Where $\hat{y}_i$ is the fitted value of the reduced model in step ($2$) and $\epsilon_i^{(k)}$ a sample without replacement of the estimated residuals.
+Where $\hat{y}_i$ is the fitted value of the reduced model in step ($2$) and $\epsilon_i^{(k)}$ a sample without replacement of the estimated residuals. With such dependent variable, we fit the full model ( _i.e._ the model under $H_1$) and extract $T^{(k)}$, the value of the test statistic in the $k$th iteration )
 
-5. Compare the value of the statistic in ($2$) with the permutational distribution estimated in ($4$) to yield the p-value.
+5. Compare the value of the statistic in ($2$) with the permutational distribution estimated in ($4$) of $T^{(k)}, \; k \in \mathcal{K}$to yield the p-value.
 
 ******
 

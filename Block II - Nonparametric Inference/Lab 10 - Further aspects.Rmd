@@ -217,7 +217,7 @@ hist(Tvec)
 abline(v=T0, col="pink")
 sum(Tvec>=T0)/B
 ```
-and we reject $H_0$
+and we do not reject $H_0$.
 Note that $X(t)$ could be a multivariate stochastic process... the procedure would be the same we would just use a depth measure for multivariate functional data (available also in `roahd`!).
 
 
@@ -445,7 +445,6 @@ $$
 by its "Bootstrap world estimate"
 $$
  t^*(s_1) = \frac{\hat{\mu}^*(s_1)-\hat{\mu}(s_1)}{\hat{\sigma}^*(s_1)}
-
 $$
 So we first estimate through MC the Bootstrap distribution $t^*(s_1)$:
 ```{r}

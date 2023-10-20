@@ -1,0 +1,645 @@
+---
+title: "Exercises on Permutation Tests and Bootstrap"
+date: 2022/10/21
+author: "Nonparametric statistics ay 2022/2023"
+output:
+  
+  html_document: 
+    df_print: paged
+  pdf_document: default
+  html_notebook: 
+    df_print: paged
+  word_document: default
+editor_options: 
+  chunk_output_type: inline
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+library(rgl)
+knitr::opts_chunk$set(echo = TRUE)
+knitr::knit_hooks$set(webgl = hook_webgl)
+```
+
+```{css, echo=FALSE}
+.extracode {
+background-color: lightblue;
+}
+```
+
+Here I wanted to give you some exam-level exercises with correction, so you are aware of what will be required...
+
+# Exercise 1
+In the file clients.rda you can find data about the churning of customers of a streaming television service. After the amount of days indicated by the time variable some of the customers have cancelled their subscription (if status= 2), while some others are still active (if status= 1). Alongside this kind of information, you are also given data about the income and age of the subscriber, and a grouping based on behavioural segmentation of your customers.
+
+Assuming all (age,income) tuples to be independent, and covariate data within behavioural groups also identically distributed, check, via a permutation test using as a test statistic the maximum norm of the absolute difference between the sample multivariate
+Mahalanobis medians of the groups, if the two groups, that are different in terms of
+behaviour, also have a different median for both age and income. Plot the empirical cumulative distribution function of the permutational test statistic, report the p-value of the test and comment it.
+
+## Solution
+Permutation test: $H_0: Me(group1) = Me(group2)$ vs $H_0: Me(group1) \neq Me(group2)$ where $Me$ is the multivariate Mahalanobis median
+
+```{r warning=FALSE}
+load('exercises_data/clients.rda')
+library(DepthProc)
+age_income=dt_2[,1:2]
+
+n1=table(dt_2$behavioural_group)[1]
+n2=table(dt_2$behavioural_group)[2]
+
+
+groups=split(age_income,dt_2$behavioural_group)
+
+mean1=depthMedian(groups$'1',depth_params = list(method='Mahalanobis'))
+mean2=depthMedian(groups$'2',depth_params = list(method='Mahalanobis'))
+
+t_stat= max(abs(mean2-mean1)) 
+
+
+
+
+
+B=200
+T_dist=numeric(B)
+set.seed(100)
+
+for(index in 1:B){
+  perm=sample(1:1000)
+  age_income.p=age_income[perm,]
+  mean1.p=depthMedian(age_income.p[1:n1,],depth_params = list(method='Mahalanobis'))
+  mean2.p=depthMedian(age_income.p[(n1+1):1000,],depth_params = list(method='Mahalanobis'))
+  T_dist[index]=max(abs(mean2.p-mean1.p))
+}
+
+
+plot(ecdf(T_dist))
+abline(v=t_stat)
+```
+
+The $P-$value of the test is:
+```{r,  warning=FALSE}
+sum(T_dist>=t_stat)/B
+```
+
+The $P-$value is $>>0.05$, I cannot refuse $H_0$, which means that I cannot refuse the equality of the two Mahalanobis medians.
+
+
+# Exercise 2
+Dr. Bisacciny, Ph.D., is a former postdoctoral researcher in statistics, now turned to beekeeping.
+Despite having left academia, he still likes to use his statistical background to assess his skills as a beekeeper.
+To do so, he wants to compare jointly the number of bees (n.bees) and the amount of honey (honey [g/year]) produced by his 20 beehives (contained in ex01.rda) against the golden standards ($c_0$) available in the literature, that determine a Tukey median value of 10,000 bees and 10,000 g/year of honey per beehive as the optimal performance standard for a beehive similar to the ones used by Dr. Bisacciny. Assuming the tuple (bee, honey) to be i.i.d. , help Dr. Bisacciny in the following:
+Using as a test statistic the euclidean distance between the sample Tukey median $\hat C$ and the golden standard $c_0$, perform a permutation test :
+   
+$$ H_0: C = c_0 \ \ \textrm{vs} \ \ H_1: C \neq c_0  \ , $$
+   
+where $C$ is the theoretical Tukey median and $c_0 = (10,000 ; 10,000)$.
+After having provided the theoretical properties of the procedure provide the histogram of the permuted distribution of the test statistic, its empirical cumulative distribution function as well as a p-value for the test and comment the results.
+
+## Solution
+Plot of the data
+
+```{r ,  warning=FALSE}
+load("exercises_data/ex01.rda")
+plot(beehive)
+```
+
+
+
+The Tukey median is:
+
+```{r,  warning=FALSE}
+
+Tukey_median=depthMedian(beehive,depth_params = list(method='Tukey'))
+Tukey_median
+```
+
+
+Histogram of permutational distribution of test statistic
+
+```{r , warning=FALSE}
+
+c_0=c(10000,10000)
+
+#permutation test
+# Computing a proper test statistic
+# (i.e., squared distance between the sample mean vector and the hypothesized center of simmetry)
+beehive_median = depthMedian(beehive,depth_params = list(method='Tukey'))
+
+n <- dim(beehive)[1]
+p <- dim(beehive)[2]
+
+T20 <- Tukey_median
+
+# Estimating the permutational distribution under H0
+B <- 1000
+T2 <- numeric(B) 
+
+set.seed(2021)
+
+
+
+
+for(perm in 1:B){
+  # In this case we use changes of signs in place of permutations
+  
+  # Permuted dataset
+  signs.perm <- rbinom(n, 1, 0.5)*2 - 1
+  beehive_perm <- matrix(c_0,nrow=n,ncol=p,byrow=T) + (beehive - c_0) * matrix(signs.perm,nrow=n,ncol=p,byrow=FALSE)
+  x.median_perm <- depthMedian(beehive_perm,depth_params = list(method='Tukey'))
+  T2[perm]  <- (x.median_perm-c_0)  %*% (x.median_perm-c_0) 
+
+  }
+
+hist(T2,xlim=range(c(T2,T20)))
+abline(v=T20,col=3,lwd=4)
+```
+
+Empirical cumulative distribution function
+```{r ,  warning=FALSE}
+plot(ecdf(T2))
+abline(v=T20,col=3,lwd=4)
+```
+
+The P-Value of the test is
+
+```{r,warning=F}
+
+p_val <- sum(T2>=T20)/B
+p_val
+
+
+```
+
+
+The P-value is way above the selected confidence level ($\alpha = 0.05$), I can thus not refuse $H_0$, and argue that the beehives of Dr. Bisacciny do not perform differently than the golden standard $c_0$
+
+# Exercise 3 (a bit harder)
+
+Dr. Dry, a university professor in statistics, wants to assess if the COVID-19 pandemic and the consequent remote teaching situation has had an effect on the academic performance of his advanced statistics course. To do so, he wants to compare the distribution of the votes (contained in ex1.rda of the last edition of the course pre-COVID (votes.pre) vs the last year course (votes.post). Since he suspects a  difference in the distributions of the votes of the two exams, he asks some advice to two young researchers, who are experts in non-parametric statistics: Dr. LeFontaine and Dr. Galvanee, that suggest two different kind of analyses. They both assume the votes in votes.pre and in votes.post to be independent, and each group to be iid.
+
+- Dr. Galvanee suspects that the two distributions are only shifted: the shape shouldn't have changed. To test this, she proposes to run the following family of permutation tests:
+      $$ H_0: \mu_{post} = \mu_{pre} + \delta \ \ \textrm{vs} \ \ H_1: \mu_{post} \neq \mu_{pre} + \delta  \ , $$
+with $\delta \in \left\{-5.0,-4.9,-4.8,\ldots,-0.1,0.0,0.1,\ldots,4.8,4.9,5.0\right\}$.
+After having introduced a suitable test statistics, provide a plot of the $p-$value function obtained (and please use the same seed for every test). Use the $p-$value function to obtain a confidence interval for the difference between the two group means.
+
+ - Dr. LeFontaine, instead, thinks that the very shape of the distribution also changed: to check this, he suggests test the equality of some quantiles of the two distributions. In detail, he proposes to run the following family of permutation tests:
+        $$ H_0: F^{-1}_{post}(1-\alpha) = F^{-1}_{pre}(1-\alpha) \ \ \textrm{vs} \ \ H_1: F^{-1}_{post}(1-\alpha) \neq F^{-1}_{pre}(1-\alpha)  \ , $$
+with $1-\alpha \in \left\{0.05,0.10,0.15,\ldots,0.85,0.90,0.95\right\}$.
+    After having introduced a suitable test statistic, provide a plot of the obtained $p-$values (also here, please use the same seed for each test).
+\item Comment the results of the two tests: what are the implications in terms of the equality of the two distributions?
+    
+## Solution
+
+```{r}
+load('exercises_data/ex1.rda')
+n.pre=length(votes.pre)
+n.post=length(votes.post)
+
+#create a permutation test for the difference in mean
+
+```
+
+## Point 1
+
+A suitable test statistic is $T=\left|\hat{\mu}_2 - \hat{\mu}_1 - \mu_0 \right|$
+```{r}
+
+
+uni_t_perm=function(data1,data2,mu0,B=1000){
+  
+  data1 = data1
+  data2 = data2 - mu0
+  t0=abs(mean(data2)-mean(data1))  
+  data=c(data1,data2)  
+  n.tot=length(data)
+  #set.seed(1991)
+  T_perm=numeric(B)
+  
+  for(index in 1:B){
+    data_perm=sample(data,replace = F)
+    data1.perm=data_perm[1:length(data1)]
+    data2.perm=data_perm[(length(data1)+1):n.tot]
+    
+    T_perm[index]=abs(mean(data2.perm)-mean(data1.perm))
+    
+  }
+  return(sum(T_perm>=t0)/B)
+}
+
+test.grid=seq(-5,5,by=0.1)
+
+pval.fun=numeric(length(test.grid))
+
+
+for(index in 1:length(test.grid)){
+  set.seed(1991)
+  pval.fun[index]=uni_t_perm(votes.pre,votes.post,test.grid[index])
+}
+
+plot(test.grid,pval.fun)
+
+
+```
+
+
+## Point 2
+
+The permutational confidence interval is
+
+```{r}
+CI=range(test.grid[pval.fun>0.05])
+names(CI)=c('lwr','upr')
+CI
+```
+
+This means that, at $\alpha=0.05$ the two means are not statistically different
+
+## Point 3
+
+A suitable test statistic in this case is $\left| F^{-1}_{post}(1-\alpha) - F^{-1}_{pre}(1-\alpha)\right|$
+
+```{r}
+
+
+uni_quant_perm=function(data1,data2,q,B=1000){
+
+  
+t0=abs(quantile(data2,prob=q)-(quantile(data1,prob=q)))  
+data=c(data1,data2)  
+n.tot=length(data)
+
+T_perm=numeric(B)
+
+for(index in 1:B){
+data_perm=sample(data,n.tot,replace = F)
+data1.perm=data_perm[1:length(data1)]
+data2.perm=data_perm[(length(data1)+1):n.tot]
+
+T_perm[index]=abs(quantile(data2.perm,prob=q)-(quantile(data1.perm,prob=q)))
+
+n=length(data)
+}
+return(sum(T_perm>=t0)/B)
+}
+
+test.q=seq(0.05,0.95,by=0.05)
+
+pval.fun=numeric(length(test.q))
+
+for(index in 1:length(test.q)){
+  set.seed(1991)
+  pval.fun[index]=uni_quant_perm(votes.pre,votes.post,test.q[index])
+}
+
+plot(test.q,pval.fun)
+abline(h=0.05)
+```
+
+## Point 4
+
+The first test says that the means are equal, but the second one shows that the very first and very last quantiles are significantly different between the two distributions: this means that the two distributions are centered around the same value, but have different tail probability
+
+
+# Exercise 4  
+
+The local administration of Torgnon, a small municipality in Aosta Valley, has given you the task
+to assess the probability of a flood coming from the small river that crosses the village.
+To do so, they given you data about the maximum water level of the past 50 years.
+The major is only willing to accept a 5% probability of flood. so your wall should be high at least
+as the 95th percentile of the maximums distribution.
+
+1. Assess the statistical quality of the sample 95th percentile, and compute a 95 percent confidence
+interval for it
+
+2. After some study, you've discovered that the maximum value of level of water is usually distributed
+as a lognormal: How can you use this information? Has your estimate of the sample 95th percentile improved?
+
+
+## Solution
+
+## Point 1
+
+```{r}
+load('water_level_data/water_level.rda')
+
+hist(water_level)
+boxplot(water_level)
+```
+
+We don't know how a sample quantile is distributed... which means that to achieve what is asked in the exam I need to use bootstrapping!
+
+```{r}
+B <- 10000
+water.obs=water_level
+
+q95.obs=quantile(water.obs,0.95)
+q95.boot = numeric(B)
+for(b in 1:B)
+{
+  water.b <- sample(water.obs, replace = T)
+  q95.boot[b] = quantile(water.b,0.95)
+}
+
+plot(ecdf(q95.boot))
+abline(v = q95.obs) #we can observe that it's quite skewed...
+```
+ Let's so compute the bias and the variance of the estimator
+ 
+```{r}
+var=var(q95.boot)
+bias=mean(q95.boot)-q95.obs
+RMSE=sqrt(var+bias^2)
+var
+bias
+RMSE
+```
+ 
+And for the confidence interval, let's use the classic reverse percentiles
+
+```{r}
+alpha <- 0.05
+
+right.quantile <- quantile(q95.boot, 1 - alpha/2)
+left.quantile  <- quantile(q95.boot, alpha/2)
+
+CI.RP <- c(q95.obs - (right.quantile - q95.obs), q95.obs, q95.obs - (left.quantile - q95.obs))
+CI.RP
+```
+
+## Point 2
+
+To solve the second part, I need to understand that I can use a parametric bootstrap, and fit a lognormal to my data.
+How to fit the parameters of a lognormal distribution? do I need to do something weird? nope!
+
+```{r}
+norm_water_level=log(water_level)
+hist(norm_water_level)
+shapiro.test(norm_water_level)
+
+mean=mean(norm_water_level)
+sd=sqrt(var(norm_water_level))
+n=length(norm_water_level)
+
+```
+
+Let's set our parametric bootstrap procedure
+
+```{r}
+q95.boot.p = numeric(B)
+
+for(b in 1:B)
+{
+  water.b <- exp(rnorm(n,mean,sd))
+  q95.boot.p[b] = quantile(water.b,0.95)
+}
+
+plot(ecdf(q95.boot.p))
+abline(v = q95.obs)
+```
+And compute everything I need
+
+```{r}
+var.p=var(q95.boot.p)
+bias.p=mean(q95.boot.p)-q95.obs
+RMSE.p=sqrt(var.p+bias.p^2)
+
+var=var(q95.boot)
+bias=mean(q95.boot)-q95.obs
+RMSE=sqrt(var+bias^2)
+
+data.frame("Non Parametric"=c(var,bias,RMSE),"Parametric"=c(var.p,bias.p,RMSE.p))
+
+```
+
+The parametric version is then slightly better than the nonparametric one...
+
+
+```{r}
+alpha <- 0.05
+
+right.quantile <- quantile(q95.boot.p, 1 - alpha/2)
+left.quantile  <- quantile(q95.boot.p, alpha/2)
+
+CI.RP.p <- c(q95.obs - (right.quantile - q95.obs), q95.obs, q95.obs - (left.quantile - q95.obs))
+CI.RP.p
+```
+
+# Exercise 5
+
+The chief coach of the Pila-Aosta ski club has tasked you to select who, among its three top-class athletes in alpine skiing, can successfully compete also in ski-cross races, which have been recently "promoted" to an alpine discipline from its former "freestyle" status.
+One of the key areas in ski-cross is the moment when the athlete "jumps" in the track: this, differently from alpine skiing, happens after the blow of a whistle. For this reason, fast reaction times can make the difference between losing and winning.
+You're so given the data about 100 "start" trials for the three athletes, stored in "parallel_gate.rda" The chief coach is asking if:
+
+1. Are there any differences among the athletes? (see if you can use a parametric approach,
+if not, use a permutational one)
+2. From a preliminary visual analysis, athlete 3 seems the best: how can you assess this, knowing
+what you discovered in 1.?
+3. The coach is also asking you an idea of the "consistency" of athlete 3 out of the gate: provide him
+with a confidence interval for the mean of his reaction time (use a permutational approach).
+
+## Solution
+
+
+Load the data and have a look at it
+
+
+```{r}
+load('parallel_gate_data/parallel_gate.rda')
+head(chrono)
+
+```
+
+let's render the data usable for analysis, namely let's convert the athlete in a factor, and let's observe the data
+
+```{r}
+chrono$athlete=factor(chrono$athlete)
+summary(chrono)
+attach(chrono)
+boxplot(reaction_time ~ athlete)
+```
+
+Athlete 3 seems better than the others.
+Let's assess if I can use a classic ANOVA
+
+```{r}
+model_norm=aov(reaction_time ~ athlete)
+summary(model_norm)
+shapiro.test(model_norm$residuals)
+qqnorm(model_norm$residuals)
+abline(a=0,b=1,col='red')
+```
+
+Normality is not verified, let's use permutational anova then
+
+```{r}
+T0 <- summary(model_norm)[[1]][1,4]
+
+T0
+
+B <- 1000 # Number of permutations
+T_stat <- numeric(B) 
+n <- nrow(chrono) 
+  
+  for(perm in 1:B){
+    # Permutation:
+    permutation <- sample(1:n)
+    reaction_perm <- reaction_time[permutation]
+    model_perm <- aov(reaction_perm ~ athlete)
+    
+    # Test statistic:
+    T_stat[perm] <- summary(model_perm)[[1]][1,4]
+  }
+
+```
+
+Let's plot the permutational distribution of the test statistic, and the ECDF
+
+```{r}
+hist(T_stat,xlim=range(c(T_stat,T0)),breaks=30)
+abline(v=T0,col=3,lwd=2)
+
+plot(ecdf(T_stat),xlim=range(c(T_stat,T0)))
+abline(v=T0,col=3,lwd=4)
+```
+```{r}
+# p-value
+p_val <- sum(T_stat>=T0)/B
+p_val
+```
+
+## Point 2
+
+To answer to the next point, you need to perform a proper post-hoc test.
+Let's go with two permutational t-tests, using as a reference level the third athlete (who seems the best...)
+
+
+```{r}
+pooled1=chrono[athlete!=2,]
+n1=nrow(pooled1)
+ath_3=pooled1$athlete==3
+T0=abs(mean(pooled1$reaction_time[ath_3])-mean(pooled1$reaction_time[!ath_3]))
+T0
+
+
+
+T_stat=numeric(B)
+for(perm in 1:B){
+  # permutation:
+  permutation <- sample(1:n1)
+  time_perm <- pooled1$reaction_time[permutation]
+  ref_perm <- time_perm[ath_3]
+  other_perm <- time_perm[!ath_3]
+  # test statistic:
+  T_stat[perm] <- abs(mean(other_perm) - mean(ref_perm))
+}
+
+p_val <- sum(T_stat>=T0)/B
+p_val
+
+```
+
+Athlete 3 is better than Athlete 1
+
+
+```{r}
+pooled2=chrono[athlete!=1,]
+n2=nrow(pooled2)
+ath_3=pooled2$athlete==3
+T0=abs(mean(pooled2$reaction_time[ath_3])-mean(pooled2$reaction_time[!ath_3]))
+T0
+
+
+
+T_stat=numeric(B)
+for(perm in 1:B){
+  # permutation:
+  permutation <- sample(1:n1)
+  time_perm <- pooled1$reaction_time[permutation]
+  ref_perm <- time_perm[ath_3]
+  other_perm <- time_perm[!ath_3]
+  # test statistic:
+  T_stat[perm] <- abs(mean(other_perm) - mean(ref_perm))
+}
+
+p_val <- sum(T_stat>=T0)/B
+p_val
+
+```
+
+Athlete 3 is also better than Athlete 2
+
+## Point 3
+We are suggested to use the permutational approach, we could nevertheless use a bootstrap one...
+
+```{r}
+uni_t_perm=function(data,mu0,B=1000){
+  
+  data_trans=data-mu0
+  T0=abs(mean(data_trans))
+  T_perm=numeric(B)
+  n=length(data)
+  
+  for(perm in 1:B){
+    
+    refl <- rbinom(n, 1, 0.5)*2 - 1
+    T_perm[perm]=abs(mean(data_trans*refl))
+    
+  }
+  return(sum(T_perm>=T0)/B)
+}
+
+library(pbapply)
+library(parallel)
+
+
+grid=seq(0,2,by=0.001)
+
+cl=makeCluster(2)
+ath_3=reaction_time[athlete==3]
+
+
+clusterExport(cl,varlist=list("ath_3","uni_t_perm"))
+
+mean(ath_3)
+
+perm_wrapper=function(grid_point){uni_t_perm(ath_3,grid_point)}
+pval_function=pbsapply(grid,perm_wrapper,cl=cl)
+
+plot(grid,pval_function,type='l')
+
+range(grid[pval_function>0.05])
+abline(v=range(grid[pval_function>0.05]))
+```
+And now the bootstrap one
+
+```{r}
+T0=mean(ath_3)
+B=1000
+T.boot=numeric(B)
+
+for(b in 1:B)
+{
+  x.b <- sample(ath_3, replace = T)
+  T.boot[b] <- mean(x.b)
+}
+
+# RP intervals
+
+alpha <- 0.05
+
+right.quantile <- quantile(T.boot, 1 - alpha/2)
+left.quantile  <- quantile(T.boot, alpha/2)
+
+T0
+right.quantile - T0
+left.quantile  - T0
+
+CI.RP <- c(T0 - (right.quantile - T0), T0 - (left.quantile - T0))
+CI.RP
+range(grid[pval_function>0.05])
+
+```
+
+
+
