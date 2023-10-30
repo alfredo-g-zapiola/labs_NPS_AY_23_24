@@ -128,7 +128,7 @@ While the manual derivation of non-orthogonal polynomials is
 straightforward, orthogonal ones are defined as powers of our original
 predictor that are mutually orthogonal.
 
-If you are curious about this, take a look at [this discussion](https://stackoverflow.com/questions/26728289/extracting-orthogonal-polynomial-coefficients-from-rs-poly-function).
+If you are curious about this, take a look at [this discussion](https://stackoverflow.com/questions/26728289/extracting-orthogonal-polynomial-coefficients-from-rs-poly-function) and [also this one](https://stackoverflow.com/questions/39031172/how-poly-generates-orthogonal-polynomials-how-to-understand-the-coefs-ret)
 
 ```{r, class.source="extracode"}
 
@@ -228,7 +228,8 @@ A smaller model here may suffice
 preds=predict(m_list_logit[[4]],list(age=age.grid),se=T)  
 
 
-pfit=exp(preds$fit )/(1+ exp( preds$fit ))  # apply logistic function
+logistic <- function(x) exp(x) / (1+exp(x))
+pfit = sapply(preds$fit, FUN=logistic)  # apply logistic function
 
 se.bands.logit = cbind(preds$fit +2* preds$se.fit , preds$fit -2*
                          preds$se.fit)
@@ -364,7 +365,7 @@ Step functions and Binning seem quite similar at first glance. However, there ar
 
 In a way, with step functions we are more free, as we are performing feature engineering via cuts on the regressor.
 
-Note that binning may also be referred to as the Regressogram, see [here](https://stackoverflow.com/questions/26728289/extracting-orthogonal-polynomial-coefficients-from-rs-poly-function)
+Note that binning may also be referred to as the Regressogram, see [here](http://faculty.washington.edu/yenchic/19A_stat535/Lec3_regression.pdf)
 
 Naturally, if the OLS estimates and the mean per interval coincide, both models coincide.
 ```{r}

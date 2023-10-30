@@ -1,0 +1,285 @@
+---
+title: "TDEs II"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Exam style questions
+
+Let us denote with $F$ the true distribution function of Exam Style Questions. These questions are sampled from $F_{ALF}$, where questions may be longer or shorter than the ones present in the actual exam, for didactic purposes. Nonetheless, the main idea is to show you how we expect you to reason during the written exam and integrate the knowledge of other laboratory sessions.
+
+## Algorithmic instructions
+
+-   All the numerical values required need to be put on an A4 sheet and uploaded, alongside the required plots.
+-   For all computations based on permutation/resampling, as well as split conformal, use B = $1000$ replicates, and seed = $42$.
+-   Both for confidence and prediction intervals, as well as tests, set $\alpha = 0.05$.
+-   When reporting a test result, please specify H0, H1 , the P−value and the corresponding conclusion.
+-   When reporting confidence/prediction intervals, always provide upper and lower bound.
+
+### Exercise 1
+
+Dr. Domenico Cavallo is a portfolio manager at Epistème S.G.R. (Società di Gestione del Risparmio). He has been asked to diversify his investments by investing in the American market. Naturally, his first though was the S&P 500 index (a fund made of 500 american companies, *cf.* [This article by Borsa Italiana](https://www.borsaitaliana.it/notizie/sotto-la-lente/sp500.htm) ). One of his analysts has provided him with a dataset of historical prices for 29 of the shares that are inside the index. Dr. Cavallo is interested in the prices of only 4 dates, namely $2014.02.20$ ($d_1$), $2015.02.20$ ($d_2$), $2016.02.19$ ($d_3$) and $2017.02.21$ ($d_4$). You have just been hired by Dr. Cavallo and are eager to make a great first impression by helping him in this project. The dataset is saved under the file *"Exam_style_exercises/data/29_stocks.csv"*.
+
+1.  Dr. Cavallo is well-aware of the fact normality may not be respected in this dataset. Looking at the four different prices per stock, thus, instead of looking at the mean he wants the deepest (according to the Mahalanobis depth) stock. Report the ticker (the letters code) of the such stock and report its price $\tilde{p}$ at $2017.02.21$
+
+```{r}
+# fix global variables as requried
+B <- 1e4
+seed <- 42
+ALPHA <- 0.05
+```
+
+```{r}
+getwd()  # helpful to know the working directory (setwd to change it)
+df <- read.csv(file="data/29_stocks.csv",
+               header=T, row.names=1)
+# select only the pertinent columns
+df <- df[, c("X2014.02.20", "X2015.02.20", "X2016.02.19", "X2017.02.21")]
+df
+```
+
+```{r}
+# inspection
+rownames(df)
+```
+
+The deepest statistical unit is by definition the median.
+
+```{r}
+median <- DepthProc::depthMedian(df, depth_params = list(method='Mahalanobis'))
+median
+```
+
+```{r}
+# save the desired value 
+p.tilde <- median[4]
+as.numeric(p.tilde)
+```
+
+```{r}
+# to know which statistical unit is the median
+which(apply(df,1,function(x) all(x %in% median)))
+```
+
+2.  Your boss is almost obsessive with such value $\tilde{p}$. He now wants to know if the univariate median at $2014.02.20$ (denote with $d_1$) coincided with it. To test this, he proposed the following family of permutation tests: $$
+    H_{0, \delta}: MED(X_{d_1}) = \tilde{p} + \delta \; vs. \; H_{1, \delta}: MED(X_{d_1}) = \tilde{p} + \delta
+    $$ where $$ 
+    \delta \in \{-60, -18, ..., -2,  0 \}
+    $$
+
+Perform permutational inference to perform the family of tests.
+
+I choose the tests statistic: $$
+T = |median(X_1) - \tilde{p} + \delta|
+$$ Assumptions: observations in $X_1$ are i.i.d The distribution of $X_1$ is symmetric. Under $H_0$, we have that the permutational distribution conditional on the sample which is likelihood-invariant against the reflections about its median.^[At least in $1$-D... what is the median in high dimensions?].
+
+```{r}
+x1 <- df$X2014.02.20
+```
+
+```{r}
+library(pbapply)
+library(parallel)
+n_cores <- detectCores()
+
+
+uni_t_perm <- function(x1, mu0, B = 1000) {
+  
+  data_trans <- x1 - mu0
+  T0 <- abs(median(data_trans)-0)
+  T_perm <- numeric(B)
+  n <- length(x1)
+  
+  for (perm in 1:B) {
+    refl <- rbinom(n, 1, 0.5) * 2 - 1
+    T_perm[perm] <- abs(median(data_trans * refl))
+  }
+  
+  return(sum(T_perm >= T0)/B)
+}
+grid=seq(-60,0, by=2)
+length(grid)
+
+```
+
+```{r}
+perm_wrapper <- function(grid_point) {
+  uni_t_perm(x1, grid_point, B = 2000)  # run a permutational t test where the hypothesised mean is the grid_point
+}
+
+pval_function <- pbsapply(grid + p.tilde,
+                          perm_wrapper)
+pval_function
+```
+
+```{r}
+plot(grid, pval_function, type = "l")  # plot p-value function
+
+```
+
+3.  Use the p−value function to obtain a confidence interval for the hypothesis test.
+Of course, we build the confidence interval selecting the values of the hypothesised median such that they have an effective significance level (p-value) higher than the set value.
+```{r}
+values.within.CI <- grid[pval_function > ALPHA] + p.tilde
+CI <- range(values.within.CI)  # obtain the confidence interval
+CI
+```
+
+
+## Exercise 2.
+
+1.  Dr. Cavallo now wants you to work on the returns instead of the prices. For stock $s$ we have that its value plus returns at date $\tilde{d}$ with respect to its price $p_{s, d_1}$ (date $d_1$) is given by: 
+$$
+    R_{s, \tilde{d}} = 100 * \bigg(1 +  \big(\frac{p_{s, \tilde{d}}}{ p_{s, d_1}} -1\big)\bigg)
+$$
+
+Obtain the dataframe of returns for $d_1$, $d_2$, $d_3$ and $d_4$ and utilise a permutation test using the norm of differences of means to assert whether
+
+$$
+\mathbf{X}_1 := (\mathbf{R_{d_1}}, \mathbf{R_{d_2}}) \stackrel{d}{=} \mathbf{X}_2 := (\mathbf{R_{d_3}}, \mathbf{R_{d_4}}) 
+$$
+where $\mathbf{R_{d_i}}$ is the vector of value plus returns at the $i$th date. Bear in mind that each column in the data matrix has the measurement of the price at the same date for each, so that $\mathbf{R_{d_j}}$ are paired.
+
+```{r}
+# we first process the original data frame to obtain the one with returns
+df.returns <- data.frame(matrix(nrow=nrow(df),
+                                ncol=ncol(df)))
+for (i in 1:nrow(df)){
+  value.d1 <- df[i, 1]
+  df.returns[i, ] <- apply(df[i, ], MARGIN=2, FUN=function(x)100*(1+(x/value.d1-1)) )
+}
+df.returns
+
+```
+
+The test statistic is
+$$
+T := | \hat{\mathbf{\mu}}_{d_1, d_2}  - \hat{\mathbf{\mu}}_{d_3, d_4} |_{\mathcal{l}_1}
+$$
+_id est_ the norm of the vector of differences of the mean vectors.
+
+Under $H_0$, the likelihood invariant permutational scheme are all the possible exchanges between pairs of bi-variate vectors, since data are paired.
+Statistical units are i.i.d and paired (for every sample element $i$, we have $4$ observations belonging of course to that same sample element $i$, in that sense they are paired observations. Another way to think about it is the fact they are repeated measures.)
+```{r}
+# perm test
+t1 <- df.returns[,c(1,2)]
+
+t2 <- df.returns[,c(3,4)]
+
+T20 <- norm(t(colMeans(t1)) - colMeans(t2))
+T2 <- numeric(B)
+p <- dim(t1)[2] # here naturally I can use t1 or t2.
+n <- dim(t2)[1]
+t.full <- rbind(as.matrix(t1), as.matrix(t2))
+set.seed(seed)
+for(perm in 1:B)
+{
+  # Random permutation
+  # N.B. exchangeability is only within pairs
+  perm.indices.t1 <- seq(1, n) + n * rbinom(n,1, 0.5)
+  t1.perm <- t.full[perm.indices.t1, ]
+  t2.perm <- t.full[-perm.indices.t1,]
+  
+  T2[perm] <- norm(t(colMeans(t1.perm)) - colMeans(t2.perm))
+}
+
+hist(T2,xlim=range(c(T2,T20)),breaks=100)
+abline(v=T20,col=3,lwd=4)
+```
+And the probability of observing under $H_0$ an equally or more extreme value of the test statistic is:
+```{r}
+sum(T2>=T20)/B
+```
+
+
+2.  Your boss, Dr. Cavallo is a very skeptic economist, to the extent that he does not believe in the official inflation datum. He believes it was $3%$ in-between-dates $2014.02.20$ for every time period in the dates of interest, starting at $d_1$. Recalculate returns by normalising prices by inflation, that is: $$
+    p^{adj}_{s, d_i} = \frac{p_{s, d_i}}{1.03^{i-1}}\; \; \forall i \in \{1, ...,4\} 
+$$
+
+and perform the same test but using the Bootstrap distribution of the statistic.
+
+
+```{r}
+# first process the dataframe to obtain inflation-adjusted prices
+df.adj <- data.frame(matrix(nrow=nrow(df),
+                                ncol=ncol(df)))
+
+for (i in 1:nrow(df)){
+  values.stock <- df[i, ]
+  df.adj[i, ] <- sapply(1:length(values.stock), FUN=function(x)values.stock[x]/(1.03**(x-1)))
+  
+}
+df.adj
+
+```
+
+```{r}
+# same test as before: we need to also retrieve returns
+df.returns <- data.frame(matrix(nrow=nrow(df),
+                                ncol=ncol(df)))
+for (i in 1:nrow(df)){
+  value.d1 <- df.adj[i, 1]
+  df.returns[i, ] <- apply(df.adj[i, ], MARGIN=2, FUN=function(x)100*(1+(x/value.d1-1)) )
+}
+df.returns
+```
+
+For this test, using the Bootstrap distibution $t^*$ of
+$$
+t := |\mathbf{\hat{\mu}}_{diff}|_{\mathbb{l}_1}
+$$
+
+that is the $l_1$ norm of pairwise differences (sample) mean vector.
+We reject $H_0$ if $0$ does not fall within the reverse percentile confidence interval obtained via the Bootstrap. THis makes sense: if $H_0$ were true, then the means of both bi-variate vectors would be the same, so a norm of $0$ for their difference would be within the confidence interval.
+
+The assumptions regarding the dataset are same as before; with the Bootstrap we additionally assume that
+$$
+\hat{F} \simeq F
+$$
+meaning the true distribution function $F$ is approximated by the e.c.d.f, so that resampling is approximately tantamount to sampling from $F$^[You may ask yourself why I use a CI instead of computing a p-value. Look at the codes you saw with Prof. Vantini; it is usually easier to work with CIs when using the Bootstrap.]
+
+```{r}
+df.diffs <- df.returns[,c(1,2)] - df.returns[,c(3,4)]
+mu.H0 <- c(0,0)
+#T20 <- norm(as.matrix(colMeans(df.diffs)- mu.H0))
+T2 <- numeric(B)
+p <- dim(t1)[2] # here naturally I can use t1 or t2.
+n <- dim(t2)[1]
+set.seed(seed)
+for(b in 1:B)
+{
+
+  boot.sample <- sample(1:n, replace=T)
+  diffs.boot <- df.diffs[boot.sample,]
+  
+  T2[b] <- norm(as.matrix(colMeans(diffs.boot)- mu.H0))
+}
+hist(T2)
+```
+
+```{r}
+q.low <- quantile(T2, ALPHA/2)
+q.up <- quantile(T2, 1-ALPHA/2)
+CI.RP <- c(T20 - (q.up - T20), T20 - (q.low - T20))
+CI.RP  # 95 percent CI for diff of medians.
+0 %in% CI.RP
+
+```
+
+```{r}
+# just an FYI
+
+"%not.present.in.the.CI%" <- function(a, b){
+ return (! (a %in% b)) 
+}
+0 %not.present.in.the.CI% CI.RP
+```
+
+3.  Comment your results and support your conclusions with the use of a DD-plot (use the Mahalanobis depth).
+
+```{r}
+DepthProc::ddPlot(as.matrix(t1), as.matrix(t2))
+```
+
+The plot is coherent with the result: if both distributions matched (which we discarded with both tests), we would have approximately a straight line in the DD-plot, which is clearly not the case.
