@@ -1,0 +1,627 @@
+---
+title: "Lab 12 - Generalized Additive Models (GAM)"
+date: 2023/11/15
+author: "Nonparametric statistics ay 2023/2024"
+output:
+  html_document: 
+    df_print: paged
+    toc: true
+    theme: united
+  pdf_document: default
+  html_notebook: 
+    df_print: paged
+  word_document: default
+editor_options: 
+  chunk_output_type: console
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+library(rgl)
+knitr::opts_chunk$set(echo = TRUE)
+knitr::knit_hooks$set(webgl = hook_webgl)
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+```{css, echo=FALSE}
+.extracode {
+background-color: lightblue;
+}
+```
+
+## Loading necessary libraries
+
+```{r message=FALSE, warning=FALSE}
+library(ISLR2)
+library(car)
+library(mgcv)
+library(rgl)
+library(splines)
+library(pbapply)
+```
+
+## Moving beyond simple (nonparametric) regression
+
+In the past two labs we have seen several methods that allow us to fit a
+smooth regression function
+$$
+y_i=f(x_i)+\varepsilon_i, \quad i=1,\ldots,N
+$$
+with $x_i\in \mathbb{R}$. In today's lab, we would like to move forward
+looking at a way to perform multivariate nonparametric regression, that
+is when $x_i\in \mathbb{R}^p$, $p>1$. We will do so by means of an
+additive approach through the Generalized Additive Models. Let us go
+back to our well-known Prestige dataset, but let us consider the
+education variable as well.
+
+```{r}
+with(Prestige, scatterplotMatrix(data.frame(prestige, education, income)))
+```
+
+The relationship between prestige and education seems fairly linear. On
+the contrary, as we have extensively experienced, prestige and income
+are quite nonlinearly related.
+
+### Multivariate linear model
+
+```{r}
+model_lm=lm(prestige ~ education + income, data=Prestige)
+summary(model_lm)
+```
+
+Building prediction surfaces is as simple as it was for the
+bidimensional case
+
+```{r}
+education.grid=seq(range(Prestige$education)[1],range(Prestige$education)[2],length.out = 100)
+income.grid=seq(range(Prestige$income)[1],range(Prestige$income)[2],length.out = 100)
+grid=expand.grid(education.grid,income.grid)
+names(grid)=c('education','income')
+pred=predict(model_lm,newdata=grid) 
+```
+
+```{r, webgl=TRUE}
+persp3d(education.grid,income.grid,pred,col='blue',border="black",lwd=0.3)
+with(Prestige, points3d(education,income,prestige,col='black',size=5))
+```
+
+### Multivariate linear model with interaction
+
+```{r}
+model_lm_interaction <- lm(prestige ~ education + income + education:income, data=Prestige) 
+# model_lm_interaction <- lm(prestige ~ education * income, data=Prestige) # alternatively 
+summary(model_lm_interaction)
+```
+
+I manage to capture a bit of the nonlinearity with the interaction
+term... Can we do better?
+
+```{r, webgl=TRUE}
+pred_interaction=predict(model_lm_interaction,newdata=grid)
+persp3d(education.grid,income.grid,pred_interaction,col='grey30')
+with(Prestige,points3d(education,income,prestige,col='black',size=5))
+```
+
+We certainly can by employing Generalized Additive Models! The main
+reference (also, surprisingly easy and straightforward to use) is
+[Generalized Additive Models: An Introduction with
+R](https://www.taylorfrancis.com/books/mono/10.1201/9781315370279/generalized-additive-models-simon-wood)
+by Simon N. Wood. The package `mgcv` accompanies the book, it is a
+very-well structured and actively maintained package that provides
+computation for smoothness estimation for a variety of models: we will
+only scratch the surface today! Recall the analytical expression of a
+GAM:
+
+```{=tex}
+\begin{aligned}
+y_{i} &=\beta_{0}+\sum_{j=1}^{p} f_{j}\left(x_{i j}\right)+\epsilon_{i} \\
+&=\beta_{0}+f_{1}\left(x_{i 1}\right)+f_{2}\left(x_{i 2}\right)+\cdots+f_{p}\left(x_{i p}\right)+\epsilon_{i}
+\end{aligned}
+```
+It is called an *additive* model because we calculate a separate $f_{j}$
+for each $X_{j}$, and then add together all of their contributions.
+
+We notice the main features of a GAM:
+
+* The nonlinear effects are modelled via the $f_j$.
+* Additivity allows us to interpret the model as with a standard linear regression.
+
+
+Operatively, `gam()` is the function of the `mgcv`package for fitting
+these types of models. It works very much like the `glm` function for
+generalized linear models. Clearly with the former we are allowed to
+specify diverse smooths options for the model terms.
+
+### GAM with cubic spline smoothing
+
+```{r}
+model_gam=gam(prestige ~ s(education,bs='cr') + s(income,bs='cr'),data = Prestige)
+```
+
+What `s()` (smoothing spline fit) does is basically building a "smooth" term for each of the
+covariates I am putting in. The behavior is very similar to
+`smooth.spline` we have seen last time, no need to set the number of
+knots, nor (like in the `gam` package) the equivalent degrees of
+freedom; `mgcv` will take care of everything for you. 
+
+With `"bs"` we indicate the _basis_ to use.
+
+`"cr"` provides a cubic spline basis defined by a modest sized set of knots spread evenly
+through the covariate values. They are penalized by the conventional
+integrated square second derivative cubic spline penalty. The fitting
+is based on penalized likelihood, where the term to be penalized is the
+second derivatives of the smooths. 
+
+`"bs"` is for the B-Spline _basis_ we saw last lecture.
+
+
+For more info, run `?smooth.terms`
+
+Let us look at the models summary
+
+```{r}
+summary(model_gam)
+```
+
+If you are familiar with the output of a `glm` object, the one above
+should not surprise you that much. The only slight exotic part may be
+the "approximate significance of smooth terms": **Effective degrees of freedom (edf)** is a summary statistic of GAM and it reflects the degree
+of non-linearity of a curve. 
+
+Notice that in this case the adjusted R
+squared is better, even without the interaction term.
+Let us look compare the residuals with the quantiles of a normal distribution:
+
+```{r}
+hist(model_gam$residuals)
+qqnorm(model_gam$residuals)
+```
+
+Note we could also compare the depths of these residuals with the depths of a sample of a normal distribution with the same mean and variance:
+
+```{r}
+mu.res <- mean(model_gam$residuals)
+s.res <- sd(model_gam$residuals)
+x <- as.matrix(model_gam$residuals)
+y <- as.matrix( rnorm(length(model_gam$residuals), mu.res, sqrt(s.res)) ) 
+DepthProc::ddPlot(x, y,
+                  depth_params = list(method='Tukey'))
+```
+
+
+Normality test:
+
+```{r}
+shapiro.test(model_gam$residuals)
+```
+
+Not bad at all! Notice that `mgcv` works with smoothing _bases_;
+nevertheless, the beauty of GAMs is that we can use **every type of univariate smoother** as building blocks for fitting an additive model. We
+would for example like to employ **natural cubic splines** for providing
+nonparametric components in our GAMs. In this case, we do not actually
+need anything new then the old but gold `lm` function and the basis
+matrix generator contained in the splines package.
+
+### GAM with natural spline smoothing
+
+
+```{r}
+model_gam_ns <-
+  lm(prestige ~ ns(education, df = 3) + ns(income, df = 3), data = Prestige)
+```
+
+In most situations, the differences in the GAMs obtained using smoothing
+splines versus natural splines are small, let us look at the residuals
+scatterplot for the two models:
+
+```{r}
+plot(model_gam_ns$residuals,model_gam$residuals)
+cor(model_gam_ns$residuals,model_gam$residuals)
+```
+
+Pretty much the same fit!
+
+GAMs make the effect interpretation of each regressor to the response
+variable easy to understand. Again, it works very much like the analysis
+of a linear model: I look at the contribution of a single predictor
+holding all the others fixed. This is graphically best accomplished with
+the plot method conveniently provided by the `mgcv` package.
+
+```{r}
+plot(model_gam)
+```
+
+The same can be achieved for the natural splines model, with a tiny
+workaround (programming tip!)
+
+```{r}
+gam::plot.Gam(model_gam_ns, se=TRUE)
+```
+
+Again, we see that there are basically no difference between `model_gam`
+and `model_gam_ns`.
+
+We have noticed already at the very beginning that the relationship
+between prestige and education seems fairly linear. We now test whether
+a smooth function is needed for education or if we can be satisfied with
+a linear contribution. The reduced model (which is _de facto_ a **semiparametric regression**) reads:
+
+### Semiparametric model
+
+```{r}
+model_gam_reduced=gam(prestige ~ education + s(income,bs='cr'),data = Prestige)
+summary(model_gam_reduced)
+```
+
+
+### F-test for comparing two models.
+
+The linear contribution of education is highly significant, but which
+model is better? Let us perform a formal test as we would do if we
+needed to perform nested model selection with `lm`: the `anova` function
+serves the purpose. 
+
+```{r}
+anova(model_gam_reduced,model_gam, test = "F")
+```
+
+Of course we could have coded the (parametric) test by ourselves, using as test statistic (cf. [this](https://sites.duke.edu/bossbackup/files/2013/02/FTestTutorial.pdf))
+$$
+F = \frac{(SS_1 - SS_2)/(df_1 - df_2)}{SS_2/df_2}
+$$
+
+```{r, class.source="extracode"}
+N <- nrow(Prestige)
+RSS_reduced <- deviance(model_gam_reduced)
+RSS_full <- deviance(model_gam)
+df_full <- N-sum(summary(model_gam)$s.table[,2])-1 # -1 for the intercept
+df_reduced <- N-sum(summary(model_gam_reduced)$s.table[,2])-2 # -2 for the intercept and the linear contribution of education
+df_difference <- df_reduced-df_full
+F_value_manual <- ((RSS_reduced-RSS_full)/df_difference)/(RSS_full/summary(model_gam)$residual.df)
+pf(F_value_manual, df1 = df_difference,df2 = df_full,lower.tail = FALSE)
+```
+
+It seems that a nonlinear component for education is needed after all.
+
+**Important**: if my residuals were not normal I would have needed to
+perform a non-parametric test, but you would have known how to do it, right? 
+
+Performing prediction for GAMs is as simple as it always has been:
+
+```{r, webgl=TRUE}
+pred_gam=predict(model_gam,newdata=grid)
+
+persp3d(education.grid,income.grid,pred_gam,col='grey30')
+with(Prestige,points3d(education,income,prestige,col='black',size=5))
+```
+
+We can include interactions in a GAM as well: we could either employ a
+simpler approach (the one we will subsequently use) by defining an
+interaction term and smooth it, or we could employ more sophisticated
+bidimensional splines, like thin plate spline ([Wood,
+2003](https://rss.onlinelibrary.wiley.com/doi/10.1111/1467-9868.00374)).
+In general, it is better to consider bivariate splines when the two
+dimensions are tightly related (e.g., different coordinates in the
+space).
+
+### GAM with interaction
+
+```{r, webgl=TRUE}
+model_gam_inter = gam(prestige ~ s(education, bs = 'cr') + 
+                        s(income, bs ='cr') + 
+                        s(I(income * education), bs = 'cr'),
+                      data = Prestige)
+
+pred_inter = predict(model_gam_inter,
+                     newdata = data.frame(grid, inter = grid$education * grid$income))
+
+persp3d(education.grid, income.grid, pred_inter, col = 'grey30')
+with(Prestige,
+     points3d(education, income, prestige, col = 'black', size = 5))
+```
+
+### GAM with Thin-Plate Splines
+And lastly, a GAM with thin-plate splines.
+```{r, webgl=TRUE}
+model_gam_tp = gam(prestige ~ s(education, income, bs="tp", m=2), # m for order
+                      data = Prestige)
+pred_tp = predict(model_gam_tp,
+                     newdata = data.frame(grid))
+
+persp3d(education.grid, income.grid, pred_tp, col = 'grey30')
+with(Prestige,
+     points3d(education, income, prestige, col = 'black', size = 5))
+```
+
+```{r}
+plot(model_gam_tp)
+```
+
+## Nonparametric inference for Nonparametric Regression
+
+In this brief section, we present the main proposal in [A simple bootstrap method for constructing nonparametric confidence bands for functions (Hall et Horowitz)](https://projecteuclid.org/journals/annals-of-statistics/volume-41/issue-4/A-simple-bootstrap-method-for-constructing-nonparametric-confidence-bands-for/10.1214/13-AOS1137.full).
+
+For simplicity we focus on the univariate case where we model:
+$$
+y_i=f(x_i)+\varepsilon_i, \quad i=1,\ldots,N
+$$
+for which of course we have an estimate $\hat{f}(x)$ which can be a Kernel regression (local estimate), a step function regression, a natural spline smoothing, _et cetera_.
+
+******
+**Algorithm 1**: Nonparametric Inference for Nonparametric Regression
+
+******
+1.  Compute the estimate $\hat{f}(x)$ and the estimate $\hat{\sigma}^2$ of the residual variance. 
+
+2. Compute residuals:
+$$
+\tilde{\epsilon}_i = y_i - \hat{f}(x_i)
+$$
+their center:
+$$
+\bar{\epsilon} = n^{-1} \sum_i \tilde{\epsilon}_i
+$$
+and the centered residuals:
+$$
+\hat{\epsilon}_i  = \tilde{\epsilon}_i - \bar{\epsilon}
+$$
+And the residual based estimator of $Var[\epsilon]$:
+$$
+\hat{\sigma}^2 = n^{-1} \sum_i \hat{\epsilon}_i^2
+$$
+
+3. **Construction of Bootstrap samples**. Set 
+$$
+y_i^* = \hat{f}(x_i) + \epsilon_i^*
+$$
+where $\epsilon_i^*$ are obtained by sampling **with replacement** (resampling) from $\hat{\epsilon}_i, \ldots, \hat{\epsilon}_N$.
+
+4. **Bootstrap versions of $\hat{f}$, $\hat{\sigma}^2$ and $\mathcal{B}(\alpha)$** (the confidence interval.)
+$$
+\mathcal{B}^*(\alpha) = \{ (x, y): \hat{f}^*(x) - s(\mathcal{X}) \hat{\sigma}^* z_{1-(\frac{\alpha}{2})} \leq y \leq \hat{f}^*(x) + s(\mathcal{X}) \hat{\sigma}^* z_{1-(\frac{\alpha}{2})}
+$$
+where $s(\mathcal{X})$ is a function of the design matrix that ensures that the estimand of the variance is consistent.
+
+Note the use of the normal c.d.f implies the use of a normal approximation.
+
+5. **Estimator of coverage error**. For every Bootstrap iteration, we have a confidence interval. We thus measure how many times the points were within the bands:
+$$
+\hat{\pi}(x, \alpha) = \mathbb{P}[(x, \hat{f}(x)) \in \mathcal{B}^*(\alpha)|\mathcal{X}] \simeq B^{-1} \sum_{k=1}^B \mathbb{I}_{\{(x, \hat{f}(x)) \in \mathcal{B}^*_b(\alpha) \}}
+$$
+
+
+6. **Constructing final confidence band**.
+Utilising the estimate in $(5)$ build the confidence bands (cf. the paper.)
+
+******
+
+
+```{r}
+
+```
+
+
+## Exam like exercise 1 (2021/01/22)
+
+Dr. Simoni, a data scientist, just had his second kid (a boy, 58 cm
+tall) and he is interested to know how tall his child will be at 25
+years of age, given his height at birth. To do so, he has collected the
+height at birth of 100 males, alongside the height they reached when
+they were 25. He has collected these data in the file *boyheight.rda*,
+*height.25* is the height [cm] at 25 years of age, while *height.b* is
+the length of the newborn [cm]. Assume that
+$$height25 = f (height.b) + \varepsilon.$$
+
+1.  Build a degree 1 regression spline model, with breaks at the 25th
+    and 75th percentile of *height.b*, to predict the height at 25 from
+    the height at birth. Provide a plot of the regression line, compute
+    the pointwise prediction (round it at the second decimal digit) for
+    the height at 25 of Dr. Simoni newborn child, and calculate, using a
+    bootstrap approach on the residuals, the bias, variance and Mean
+    Squared Error (MSE) of such prediction
+
+2.  Dr. Simoni is not particularly satisfied with the predictions of
+    such a simple model, and would like you to do more. So build a
+    prediction model for the height at 25 based on a smoothing spline of
+    order 4 (select the lambda parameter via Leave-One-Out CV). Report
+    the optimal lambda value (2 decimal digits), provide a plot of the
+    regression line, alongside the point-wise prediction of the height
+    at 25 of Dr. Simoni's kid, and calculate using a bootstrap approach
+    on the residuals the bias, variance and MSE of such prediction (fix
+    the lambda value to the one obtained via Leave-One-Out CV).
+
+### Solution
+
+1.  
+
+```{r}
+load(here::here("Block III - Nonparametric regression/data/boyheight.rda"))
+plot(x=height.b, y=height.25)
+
+# Breaks at the 25th and 75th percentile of *height.b*
+  
+knots_heigth <- quantile(height.b,probs = c(.25,.75))
+
+# Build a degree 1 regression spline model
+
+fit_spline <- lm(height.25~bs(height.b,knots = knots_heigth,degree = 1))
+new_data_seq <- seq(min(height.b),max(height.b),length.out=100)
+
+# Predict the height at 25 from the height at birth
+preds=predict(fit_spline, newdata = list(height.b=new_data_seq),se=T)
+se.bands=cbind(preds$fit +2* preds$se.fit ,preds$fit -2* preds$se.fit)
+```
+
+```{r}
+# Plot of the regression line
+plot(y=height.25,x=height.b  ,cex =.5, col =" darkgrey " )
+lines(new_data_seq,preds$fit ,lwd =2, col =" blue")
+matlines(new_data_seq,se.bands ,lwd =1, col =" blue",lty =3)
+```
+
+```{r}
+# Pointwise prediction
+simoni_weigth <- 58
+(pointwise_pred <- predict(fit_spline, newdata = list(height.b=simoni_weigth)))
+```
+
+```{r}
+# Bias, variance and Mean Squared Error (MSE) of pointwise_pred
+wrapper_f <- function(){
+  height.25.boot=fitted+sample(residuals,n,replace=T)
+  new_model=lm(height.25.boot ~ bs(height.b, knots=knots_heigth,degree=1))
+  predict(new_model, newdata = list(height.b=simoni_weigth))
+}
+
+B <- 200
+fitted=fit_spline$fitted.values
+residuals=fit_spline$residuals
+n <- length(height.25)
+set.seed(100)
+
+boot_d <- pbreplicate(n = B,expr = wrapper_f(),simplify = "vector")
+```
+
+```{r}
+(variance_pred <- var(boot_d))
+(bias_pred <- pointwise_pred-mean(boot_d))
+(MSE_pred <- variance_pred +bias_pred^2)
+```
+
+2.  
+
+```{r}
+# smoothing spline of order 4 (cv=TRUE for LOOCV)
+fit_smooth <- smooth.spline(x = height.b, y=height.25,cv = TRUE)
+
+# optimal lambda value
+round(fit_smooth$lambda,2)
+
+# plot of the regression line
+plot(y=height.25,x=height.b  ,cex =.5, col =" darkgrey " )
+lines(fit_smooth$x, fit_smooth$y, col="blue", lwd=2)
+
+fitted_smooth <- predict(fit_smooth, height.b)$y
+fitted_res <- height.25-fitted_smooth
+
+pred_smooth_simoni <- predict(fit_smooth, simoni_weigth)
+# pointwise prediction of the height at 25 of Dr. Simoni’s kid
+pred_smooth_simoni$y
+```
+
+```{r}
+boot_smooth=numeric(B)
+set.seed(100)
+for(sample in 1:B){
+  
+  height.25.boot=fitted_smooth+sample(fitted_res,n,replace=T)
+  new_model=smooth.spline(y = height.25.boot,x =  height.b, lambda = fit_smooth$lambda)
+  boot_smooth[sample]=predict(new_model, simoni_weigth)$y
+}
+
+
+(variance_pred_smooth <- var(boot_smooth))
+(bias_pred_smooth <- pred_smooth_simoni$y-mean(boot_smooth))
+(MSE_pred_smooth <- variance_pred_smooth +bias_pred_smooth^2)
+```
+
+## Exam like exercise 2 (2021/06/14)
+
+Dr. Bisacciny, Ph.D is becoming increasingly worried about the fact that
+the bees that he decided to place near a corn field close to the Italian
+city of Milan tend to die way earlier than the ones that are placed
+close to the small village of Jovençan, in Aosta Valley. He suspects
+that additional factors that influence the survival time of a the bee
+are its productivity, and its weight. For this reason, he decides to run
+an experiment, in which he selects 10,000 bees, placing 5,000 of them in
+Aosta Valley and 5,000 in Milan. Dr. Bisacciny runs the experiment for
+50 days, during which he annotates when a bee passes away. After the end
+of the experiment, he starts to analyse the data. In the file ex02.rda
+you can find a dataframe with information about the status of the bee (1
+if alive, 2 if dead), the survival time of the bee (surv.time), its
+weight (weight) and productivity (prod) as well as its being in Jovençan
+or in Milan. Modeling this data as i.i.d. realizations of a four
+dimensional random variable:
+
+1.  Build an additive model for log(surv.time), where log() is the
+    natural logarithm, using cubic b-spline terms for the main effects,
+    a dummy term for location and no interactions. After having written
+    in proper mathematical terms the additive model you have estimated,
+    report the adjusted $R^2$ and the p-values of the tests. Comment the
+    result (assume the residuals to be normal).
+2.  After having reduced the model to its significant terms and use this
+    model to provide a pointwise prediction for the average log-survival
+    time for a bee that lives in Milan or in Jovençan. Is it necessary
+    to use the gam machinery to estimate the reduced model?
+
+### Solution
+
+```{r}
+load(here::here("Block III - Nonparametric regression/data/ex02.rda"))
+head(bee)
+```
+
+```{r}
+fit_gam <- gam(log(surv.time)~s(weight,bs = "cr")+s(prod,bs = "cr")+location,data = bee)
+```
+
+Estimated model
+
+```{=tex}
+\begin{equation}
+log(surv.time) =\beta_{0}+f\left(weight\right)+f\left(prod\right)+\beta_1 location_{Milan}+\epsilon
+\end{equation}
+```
+```{r}
+table_fit_gam <- summary(fit_gam)
+# adjusted R2
+(r_2_squared <- table_fit_gam$r.sq)
+
+# p-values of the tests (parametric coefficients)
+table_fit_gam$p.pv
+
+# p-values of the tests (smooth terms)
+table_fit_gam$s.pv
+```
+
+```{r}
+plot(fit_gam)
+```
+
+```{r}
+hist(fit_gam$residuals)
+```
+
+2.  
+
+```{r}
+# Remove weight
+fit_gam_reduced_1 <- gam(log(surv.time)~s(prod,bs = "cr")+location,data = bee)
+anova(fit_gam_reduced_1,fit_gam, test = "F")
+
+# Remove prod
+fit_gam_reduced_2 <- gam(log(surv.time)~location,data = bee)
+anova(fit_gam_reduced_2, fit_gam_reduced_1, test = "F")
+```
+
+I can use a simple linear model with just a term: location. No need to
+use the gam machinery anymore.
+
+```{r}
+fit_lm <- lm(log(surv.time)~location,data = bee)
+
+# Avg log surv time in Milan
+sum(fit_lm$coefficients)
+# mean(log(bee$surv.time[bee$location=="Milan"])) # alternatively
+
+# Avg log surv time in Jovencan
+fit_lm$coefficients[1]
+# mean(log(bee$surv.time[bee$location=="Jovencan"])) # alternatively
+```
+
+More concise way using `tapply` and functional programming
+
+```{r}
+tapply(log(bee$surv.time), bee$location, mean)
+```
