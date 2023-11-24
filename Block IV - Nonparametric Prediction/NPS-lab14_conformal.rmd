@@ -1,0 +1,969 @@
+---
+title: "Lab 14 - Conformal Prediction"
+date: 2023/11/24
+author: "Nonparametric statistics ay 2023/2024"
+output:
+  
+  html_document: 
+    df_print: paged
+    toc: true
+  pdf_document: default
+  html_notebook: 
+    df_print: paged
+  word_document: default
+editor_options: 
+  chunk_output_type: console
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+library(rgl)
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache = TRUE)
+knitr::knit_hooks$set(webgl = hook_webgl)
+ggplot2::theme_set(ggplot2::theme_bw())
+```
+
+```{css, echo=FALSE}
+.extracode {
+background-color: lightblue;
+}
+```
+
+## Loading necessary libraries
+
+```{r message=FALSE, warning=FALSE}
+library(dplyr) 
+library(ggplot2)
+library(knitr)
+library(broom)
+library(tidyr)
+library(progress)
+library(pbapply)
+pboptions(type='none')
+library(dbscan)
+library(gridExtra)
+```
+
+\pagebreak
+
+## Introduction to Conformal Prediction
+The scope of this practice session is to make you familiar with some core and advanced topics in Conformal Prediction. By resorting to synthetic data, we aim to analyze different experimental settings and see how and why conformal inference is a key tool to tackle uncertainty quantification in prediction problems.
+
+### Validity
+Let us first focus on validity. In this section, we see how a well-known parametric interval fails in producing valid prediction intervals when the observations do not meet the distributional assumptions, while distribution-free conformal inference guarantees distribution-free validity.
+
+#### Sample from a gaussian distribution
+```{r}
+set.seed(2023)
+n <- 100
+grid_factor <- 1.25
+alpha <- .1
+
+y <- rnorm(n,mean=0, sd=1)
+hist(y, col='lightblue')
+```
+
+**Fisher's prediction interval**
+
+When $X_1,..., X_n$ and $X_{n+1}$ are sampled iid from a gaussian distribution $N(\mu, \sigma^2)$, with $\mu$ and $\sigma^2$ unknown, then we know that
+
+$$\frac{X_{n+1} - \bar{X}}{s \sqrt{1+\frac{1}{n}}} \sim t(n-1)$$
+Then, the prediction interval of level $1-\alpha$ for $X_{n+1}$ is the Fisher's prediction interval and has the form
+
+$$C_{1-\alpha}\left( \bar{X} - s \sqrt{1+\frac{1}{n}} t_{\alpha/2}(n-1), \bar{X} + s \sqrt{1+\frac{1}{n}} t_{\alpha/2}(n-1)\right)$$
+The prediction interval is exact in the sense that
+
+$$\mathbb{P} \left(X_{n+1} \in C_{1-\alpha} \right) = 1 - \alpha$$
+We can compute by hand the Fisher's prediction interval
+```{r}
+wrapper_param <- function(grid_point, y){
+  n  <- length(y)
+  t0 <- (grid_point - mean(y))/sd(y)/sqrt(1+1/n)
+  2*(1-pt(abs(t0), n-1))
+}
+
+# Create a grid of test points
+n_grid <- 200
+test_grid <- seq(-grid_factor*max(abs(y)),+grid_factor*max(abs(y)),length.out=n_grid)
+pval_fun <- sapply(test_grid, wrapper_param, y)
+plot(test_grid,pval_fun,type='l')
+```
+
+The prediction interval is found as the set of points corresponding to p-value greater than $\alpha$.
+
+```{r}
+index_in <- pval_fun>alpha
+PI.param <- range(test_grid[index_in])
+```
+
+**Conformal prediction set**
+
+By resorting to conformal inference in the full conformal setting, we now construct the distribution-free counterpart of the Fisher's prediction interval (indeed, we are considering the same non-conformity measure as before!).
+
+```{r}
+wrapper_full <- function(grid_point, y){
+  aug_y <- c(grid_point,y)
+  ncm <- numeric(length(aug_y))
+  for (i in 1:length(aug_y)) {
+    ncm[i] <- abs(aug_y[i] - mean(aug_y[-i]))/sd(aug_y[-i])/sqrt(1+1/length(aug_y[-i]))
+  }
+  sum(ncm>=ncm[1])/(length(aug_y))
+}
+
+# Create a grid of test points
+n_grid <- 200
+test_grid <- seq(-grid_factor*max(abs(y)),+grid_factor*max(abs(y)),length.out=n_grid)
+pval_fun <- sapply(test_grid, wrapper_full, y)
+plot(test_grid,pval_fun,type='l')
+```
+
+Again, the prediction interval is found as the set of points corresponding to p-value greater than $\alpha$.
+
+```{r}
+index_in <- pval_fun>alpha
+PI <- range(test_grid[index_in])
+
+# Plot the prediction intervals
+plot(test_grid,pval_fun,type='l')
+abline(v=PI,col='blue') # Conformal prediction interval
+abline(v=PI.param, col='darkorange') # Fisher's prediction interval
+legend("topright", legend=c("Conformal", "Fisher's"), col=c("blue", "darkorange"),
+       lty=1, cex=0.8)
+
+
+hist(y, col='lightblue')
+abline(v=PI,col='blue') # Conformal prediction interval
+abline(v=PI.param, col='darkorange') # Fisher's prediction interval
+legend("topright", legend=c("Conformal", "Fisher's"), col=c("blue", "darkorange"),
+       lty=1, cex=0.8)
+```
+
+Are the prediction sets valid?
+
+We test it via repeated experiments.
+
+```{r}
+alpha <- .1
+n <- 100
+n.test <- 100
+
+n.rep <- 100
+param.coverage <- numeric(n.rep)
+conf.coverage <- numeric(n.rep)
+
+pb <- progress::progress_bar$new(
+  format=" MC simulation [:bar] :percent in :elapsed",
+  total=n.rep, clear=FALSE, width=60)
+for(i in 1:n.rep){
+  set.seed(2023+i)
+
+  y <- rnorm(n, mean=0, sd=1)
+  y.test <- rnorm(n.test, mean=0, sd=1)
+
+  # Fisher's prediction interval
+  pval_fun <- pbsapply(y.test,wrapper_param,y)
+  param.coverage[i] <- mean(pval_fun>alpha)
+  
+  # Conformal prediction interval
+  pval_fun <- pbsapply(y.test,wrapper_full,y)
+  conf.coverage[i] <- mean(pval_fun>alpha)
+  
+  pb$tick()
+}
+
+# Display results
+coverage <- c(conf.coverage, param.coverage)
+method <- rep(c("Conformal","Fisher's"), each=n.rep)
+data <- data.frame(method, coverage)
+
+pgplot <- ggplot(data, aes(x=method, y=coverage, fill=method)) + 
+  geom_boxplot() +
+  scale_y_continuous(limits=c(0.60,1.00)) +
+  theme_bw() + 
+  labs(x="", y="Marginal coverage", fill="Method")
+pgplot
+```
+
+
+#### Sample from a heavy-tailed distribution
+Let us repeat the same procedure when the data are not sampled from a gaussian distribution.
+For instance, we sample from a t-student distribution.
+
+```{r}
+set.seed(2023)
+n <- 100
+y <- rt(n, df=2)
+hist(y, col='lightblue')
+```
+
+**Fisher's prediction interval**
+
+```{r}
+n_grid <- 200
+test_grid <- seq(-grid_factor*max(abs(y)),+grid_factor*max(abs(y)),length.out=n_grid)
+pval_fun <- sapply(test_grid,wrapper_param,y)
+plot(test_grid,pval_fun,type='l')
+
+index_in <- pval_fun>alpha
+PI.param <- range(test_grid[index_in])
+```
+
+**Conformal prediction interval**
+
+```{r}
+n_grid <- 200
+test_grid <- seq(-grid_factor*max(abs(y)),+grid_factor*max(abs(y)),length.out=n_grid)
+pval_fun <- sapply(test_grid,wrapper_full,y)
+plot(test_grid,pval_fun,type='l')
+
+index_in <- pval_fun>alpha
+PI <- range(test_grid[index_in])
+
+# Plot the prediction intervals
+plot(test_grid,pval_fun,type='l')
+abline(v=PI,col='blue') # Conformal prediction interval
+abline(v=PI.param, col='darkorange') # Fisher's prediction interval
+legend("topright", legend=c("Conformal", "Fisher's"), col=c("blue", "darkorange"),
+       lty=1, cex=0.8)
+
+
+hist(y, col='lightblue')
+abline(v=PI,col='blue') # Conformal prediction interval
+abline(v=PI.param, col='darkorange') # Fisher's prediction interval
+legend("topright", legend=c("Conformal", "Fisher's"), col=c("blue", "darkorange"),
+       lty=1, cex=0.8)
+```
+
+What about validity now?
+
+```{r}
+alpha <- .1
+n <- 100
+n.test <- 100
+n_grid <- 200
+grid_factor <- 3
+
+n.rep <- 100
+param.coverage <- numeric(n.rep)
+conf.coverage <- numeric(n.rep)
+
+pb <- progress::progress_bar$new(
+  format=" MC simulation [:bar] :percent in :elapsed",
+  total=n.rep, clear=FALSE, width=60)
+for(i in 1:n.rep){
+  
+  set.seed(2023+i)
+
+  y <- rt(n, df=2)
+  y.test <- rt(n.test, df=2)
+
+  # Fisher's prediction interval
+  pval_fun <- pbsapply(y.test,wrapper_param,y)
+  param.coverage[i] <- mean(pval_fun>alpha)
+  
+  # Conformal prediction interval
+  pval_fun <- pbsapply(y.test,wrapper_full,y)
+  conf.coverage[i] <- mean(pval_fun>alpha)
+  
+  pb$tick()
+}
+
+# Display results
+coverage <- c(conf.coverage, param.coverage)
+method <- rep(c("Conformal","Fisher's"), each=n.rep)
+data <- data.frame(method, coverage)
+
+pgplot <- ggplot(data, aes(x=method, y=coverage, fill=method)) + 
+  geom_boxplot() +
+  scale_y_continuous(limits=c(0.60,1.00)) +
+  theme_bw() + 
+  labs(x="", y="Marginal coverage", fill="Method")
+pgplot
+```
+
+### Efficiency
+The conformal prediction machinery guarantees validity of the resulting prediction set. The choice of ad-hoc non-conformity measures, on the other hand, may improve the efficiency of the prediction regions (namely, reduce their width).
+
+Let us sample the data from a bimodal distribution, and repeat the construction of the conformal prediction set when employing as non-conformity measures:
+
+* the absolute value of the difference from the mean,
+
+* the average eucledian distance from the k-nearest neighbors.
+
+We aim to assess how the amplitude of the prediction set changes when adopting one or the other non-conformity measure.
+
+```{r}
+n <- 100
+grid_factor <- 1.25
+alpha <- .1
+
+set.seed(2023)
+y <- c(rnorm(n/2,mean=-2.6),rnorm(n/2,mean=2.6))
+hist(y, col='lightblue')
+```
+
+#### Absolute value of the difference from the mean
+
+```{r}
+n_grid <- 1000
+test_grid <- seq(-grid_factor*max(abs(y)),+grid_factor*max(abs(y)),length.out=n_grid)
+pval_fun <- sapply(test_grid,wrapper_full,y)
+plot(test_grid,pval_fun,type='l')
+```
+
+and compute the prediction interval, as before
+
+```{r}
+index_in <- pval_fun>alpha
+PI.abs <- range(test_grid[index_in])
+```
+
+#### Average eucledian distance from the K-nn
+
+```{r}
+wrapper_knn <- function(grid_point,y){
+  k_s <- 0.25
+  aug_y <- c(grid_point,y)
+  ncm <- kNNdist(matrix(aug_y),k_s*length(y))
+  sum((ncm[-1]>=ncm[1]))/length(aug_y)
+}
+
+pval_fun <- pbsapply(test_grid,wrapper_knn,y)
+plot(test_grid,pval_fun,type='l')
+```
+
+Now the p-value function is not unimodal, so we cannot simply take the range of the test points corresponding to a p-value larger than $\alpha$. The generalization is rather straightforward though.
+
+```{r}
+index_in <- pval_fun>alpha
+PI.knn <- test_grid[as.logical(c(0,abs(diff(index_in))))]
+```
+
+Visualize now the resulting prediction intervals:
+
+```{r}
+# Plot the prediction intervals
+hist(y, col='lightblue')
+abline(v=PI.abs,col='blue') # Conformal PI with "classical" ncm
+abline(v=PI.knn, col='darkred') # Conformal PI with k-nn ncm
+legend("topright", legend=c("PI abs", "PI k-nn"), col=c("blue", "darkred"),
+       lty=1, cex=0.8)
+
+```
+
+Again, one might repeat the experiment to check that the conformal PI with the k-nn mean eucledian distance is consistently more efficient than the competitor, though both being valid.
+
+```{r}
+alpha <- .1
+n <- 100
+n.test <- 100
+grid_factor <- 1.25
+n_grid <- 200
+
+n.rep <- 100
+abs.coverage <- numeric(n.rep)
+knn.coverage <- numeric(n.rep)
+abs.size <- numeric(n.rep)
+knn.size <- numeric(n.rep)
+
+set.seed(2023)
+pb <- progress::progress_bar$new(
+  format=" MC simulation [:bar] :percent in :elapsed",
+  total=n.rep, clear=FALSE, width=60)
+for(i in 1:n.rep){
+  
+  y <- c(rnorm(n/2,mean=-2.6),rnorm(n/2,mean=2.6))
+  y.grid <- seq(-grid_factor*max(abs(y)),+grid_factor*max(abs(y)),length.out=n_grid)
+
+  y.test <- c(rnorm(n.test/2,mean=-2.6),rnorm(n.test/2,mean=2.6))
+  y.test <- sort(y.test)
+  
+  ## Absolute difference from the mean
+  pval_fun <- pbsapply(y.grid,wrapper_full,y)
+  index_in <- pval_fun>alpha
+  PI.abs <- range(y.grid[index_in])
+  
+  # Efficiency
+  abs.size[i] <- PI.abs[2] - PI.abs[1]
+  
+  # Validity
+  abs.coverage[i] <- mean((y.test >= PI.abs[1])*(y.test <= PI.abs[2]))
+  
+  ## K-nn
+  pval_fun <- pbsapply(y.grid,wrapper_knn,y)
+  index_in <- pval_fun>alpha
+  PI.knn <- y.grid[as.logical(c(index_in[1],abs(diff(index_in)),tail(index_in,n=1)))]
+  PI.knn_matrix <- matrix(PI.knn, ncol = 2, byrow = TRUE)
+  
+  # Efficiency
+  knn.size[i] <- sum(PI.knn_matrix[,2]-PI.knn_matrix[,1])
+  
+  # Validity
+  check_in <- rep(FALSE, n.test)
+  for(j in 1:nrow(PI.knn_matrix)){
+    check_in <- check_in + (y.test >= PI.knn_matrix[j,1])*(y.test <= PI.knn_matrix[j,2])
+  }
+  knn.coverage[i] <- mean(check_in)
+  
+  pb$tick()
+}
+
+# Display results
+coverage <- c(abs.coverage, knn.coverage)
+method <- rep(c("abs","k-nn"), each=n.rep)
+data.coverage <- data.frame(method, coverage)
+
+size <- c(abs.size, knn.size)
+method <- rep(c("abs","k-nn"), each=n.rep)
+data.size <- data.frame(method, size)
+
+p1 <- ggplot(data.coverage, aes(x=method, y=coverage, fill=method)) + 
+  geom_boxplot() +
+  scale_y_continuous(limits=c(0.60,1.00)) +
+  theme_bw() + 
+  labs(x="", y="Marginal coverage", fill="Method")
+
+p2 <- ggplot(data.size, aes(x=method, y=size, fill=method)) + 
+  geom_boxplot() +
+  scale_y_continuous(limits=c(5,9)) +
+  theme_bw() + 
+  labs(x="", y="Average size", fill="Method")
+
+grid.arrange(p1, p2, ncol = 2)
+```
+
+## Conformal Prediction in Regression
+
+Let us consider now the particular case of regression, where the point predictor for a new observation $Y_{n+1}$ of the response variable is given by the OLS estimate obtained on the training data, applied to the observed predictors $X_{n+1}$. We compare the prediction intervals obtained under parametric assumptions with those obtained via conformal inference in the split conformal fashion.
+
+The key idea in the split conformal framework is to compute a conformity score for each observation, measuring the discrepancy between the true value of Y and that predicted
+by the linear model. The model fitted on the training data is then applied to hold-out calibration samples, producing a collection of conformity scores. As all data points are exchangeable, the empirical distribution of the calibration scores can be leveraged to make predictive inferences about the conformity score of a new test point. Finally, inverting the function defining the conformity scores yields a prediction set for the test $Y_{n+1}$.
+
+Inthe following, we will consider cases when the parametric assumptions are met, and cases when the parametric assumptions are violated.
+
+To generate each scenario, we will resort the following data generation function:
+
+```{r}
+sample_data <- function(model=c("homoscedastic", "heavy-tailed", "heteroscedastic"),
+                        n,
+                        seed)
+{
+  set.seed(seed)
+  if(model=="homoscedastic"){
+    x <- runif(n,0,1)
+    epsilon <- 0.2*rnorm(n,0,1)
+    y <- x + epsilon
+  }
+  
+  if(model=="heavy-tailed"){
+    x <- runif(n,0,1)
+    epsilon <- 0.2*rt(n, df=2)
+    y <- x + epsilon
+  }
+  
+  if(model=="heteroscedastic"){
+    x <- runif(n,0,1)
+    epsilon <- 0.2 * (x^2) * rnorm(n,0,1) 
+    y <- x + epsilon
+  }
+  
+  out <- list("x" = x,
+              "y" = y)
+  return(out)
+}
+```
+
+### Linear regression with homoscedastic residuals
+We generate data from a toy model with one explanatory variable and one response variable.
+
+```{r}
+seed <- 2023
+n <- 1000
+
+data <- sample_data(model="homoscedastic", n, seed)
+x <- data$x
+y <- data$y
+
+par(mfrow=c(1,2))
+hist(y, breaks=10, col='lightblue', main="Histogram of y values")
+plot(x, y, col='lightblue', main="Data")
+```
+
+
+```{r}
+# Fit linear model with ols
+mod <- lm(y ~ x, data)
+
+# Display the regression function
+x.grid <- data.frame("x"=seq(0,1,length.out=1000))
+y.grid.hat <- predict(mod, x.grid)
+par(mfrow=c(1,1))
+plot(x, y, col='lightblue', main="Data and linear regession function")
+lines(x.grid$x, y.grid.hat, type='l', col='black', lwd=2)
+```
+
+#### Parametric prediction intervals
+We can use linear regression theory to compute prediction intervals, and define a function to evaluate the coverage and width of the prediction set on test data.
+
+```{r}
+evaluate_predictions <- function(x.test, y.test, x.grid, lower, upper, view_plot=T){
+  covered <- (y.test >= lower)*(y.test<=upper)
+  coverage <- mean(covered)
+  width <- mean(upper-lower)
+  
+  if(view_plot){
+    idx.sort <- sort(x.test$x, index.return=TRUE)$ix
+    plot(x.test$x[idx.sort], y.test[idx.sort], col='lightblue', main=paste0("Prediction interval, alpha=",alpha, ", coverage=", round(coverage,2), ", width=", round(width,2)),
+     xlab="x test", ylab="y test")
+    lines(x.test$x[idx.sort], lower[idx.sort], lty=3, col='black', lwd=2)
+    lines(x.test$x[idx.sort], upper[idx.sort], lty=3, col='black', lwd=2)
+  }
+  
+  out <- list("coverage"=coverage,
+              "width"=width)
+  return(out)
+}
+
+n.test <- 1000
+data.test <- sample_data(model="homoscedastic", n.test, seed+n)
+x.test <- data.test$x
+y.test <- data.test$y
+x.test <- data.frame("x"=x.test)
+
+# Nominal significance level
+alpha <- .1
+pi.param <- predict(mod, x.test, interval="prediction", level=1-alpha)
+
+performance <- evaluate_predictions(x.test, y.test, lower=pi.param[,'lwr'], upper=pi.param[,'upr'])
+```
+
+#### Conformal prediction intervals
+```{r}
+#' Compute conformal prediction interval
+reg_split_conformal <- function(x, y, x.test, alpha){
+  n <- length(y)
+  n.train <- floor(n/2)
+  n.calib <- n-n.train
+  
+  # Split the data into training and calibrations sets
+  idxs.train <- sample(1:n, size=n.train)
+  
+  x.train <- x[idxs.train]
+  y.train <- y[idxs.train]
+  x.calib <- x[-idxs.train]
+  y.calib <- y[-idxs.train]
+  
+  data <- data.frame("x"=x.train, "y"=y.train)
+  mod <- lm(y~x, data)
+  ncs.calib <- abs(y.calib - predict(mod, data.frame("x"=x.calib)))
+  ncs.quantile <- quantile(ncs.calib, prob=(1-alpha)*(n.calib+1)/n.calib)
+  
+  # Construct the prediction interval
+  x.test <- data.frame("x"=x.test)
+  y.hat <- predict(mod, x.test)
+  lower_bound <- y.hat - ncs.quantile
+  upper_bound <- y.hat + ncs.quantile
+  
+  out <- list("lower_bound"=lower_bound,
+              "upper_bound"=upper_bound)
+  
+}
+
+# Nominal significance level
+alpha <- .1
+pi.conformal <- reg_split_conformal(x, y, x.test, alpha)
+
+performance <- evaluate_predictions(x.test, y.test, lower=pi.conformal$lower_bound, upper=pi.conformal$upper_bound)
+```
+
+### Linear regression with heavy tailed residuals
+Let us now consider data generated by a linear regression model with heavy tailed residuals.
+
+```{r}
+n <- 1000
+
+data <- sample_data(model="heavy-tailed", n, seed)
+x <- data$x
+y <- data$y
+
+par(mfrow=c(1,2))
+hist(y, breaks=10, col='lightblue', main="Histogram of y values")
+plot(x, y, col='lightblue', main="Data")
+
+# Fit linear model with ols
+mod <- lm(y ~ x, data)
+
+# Display the regression function
+x.grid <- data.frame("x"=seq(0,1,length.out=1000))
+y.grid.hat <- predict(mod, x.grid)
+par(mfrow=c(1,1))
+plot(x, y, col='lightblue', main="Data and linear regession function")
+lines(x.grid$x, y.grid.hat, type='l', col='black', lwd=2)
+```
+
+Again, we use linear regression theory to compute prediction intervals, and evaluate the coverage and width of the prediction set on test data.
+
+```{r}
+n.test <- 1000
+data.test <- sample_data(model="heavy-tailed", n.test, seed+n)
+x.test <- data.test$x
+y.test <- data.test$y
+x.test <- data.frame("x"=x.test)
+
+# Nominal significance level
+alpha <- .1
+pi.param <- predict(mod, x.test, interval="prediction", level=1-alpha)
+
+performance.param <- evaluate_predictions(x.test, y.test, lower=pi.param[,'lwr'], upper=pi.param[,'upr'])
+
+pi.conformal <- reg_split_conformal(x, y, x.test, alpha)
+
+performance.conformal <- evaluate_predictions(x.test, y.test, lower=pi.conformal$lower_bound, upper=pi.conformal$upper_bound)
+```
+
+### Linear regression with heteroscedastic residuals
+
+We now repeat the same analysis on data generated with a linear regression model with heteroscedastic residuals.
+
+```{r}
+n <- 1000
+
+data <- sample_data(model="heteroscedastic", n, seed)
+x <- data$x
+y <- data$y
+
+par(mfrow=c(1,2))
+hist(y, breaks=10, col='lightblue', main="Histogram of y values")
+plot(x, y, col='lightblue', main="Data")
+
+# Fit linear model with ols
+mod <- lm(y ~ x, data)
+
+# Display the regression function
+x.grid <- data.frame("x"=seq(0,1,length.out=1000))
+y.grid.hat <- predict(mod, x.grid)
+par(mfrow=c(1,1))
+plot(x, y, col='lightblue', main="Data and linear regession function")
+lines(x.grid$x, y.grid.hat, type='l', col='black', lwd=2)
+```
+
+Again, we use linear regression theory to compute prediction intervals, and evaluate the coverage and width of the prediction set on test data.
+
+```{r}
+n.test <- 1000
+data.test <- sample_data(model="heteroscedastic", n.test, seed+n)
+x.test <- data.test$x
+y.test <- data.test$y
+x.test <- data.frame("x"=x.test)
+
+# Nominal significance level
+alpha <- .1
+pi.param <- predict(mod, x.test, interval="prediction", level=1-alpha)
+
+performance.param <- evaluate_predictions(x.test, y.test, lower=pi.param[,'lwr'], upper=pi.param[,'upr'])
+
+pi.conformal <- reg_split_conformal(x, y, x.test, alpha)
+
+performance.conformal <- evaluate_predictions(x.test, y.test, lower=pi.conformal$lower_bound, upper=pi.conformal$upper_bound)
+```
+
+*RECALL:* Conformal prediction guarantees **marginal validity** in finite samples! But an ideal prediction interval should be:
+* valid in finite samples, without making strong distributional assumptions
+* the shortest possible at each point in the covariates space, for the prediction to be informative. 
+
+##### Toward conditional validity
+Current research is going toward solving the issue of adjusting the prediction intervals according to the local variability of the responses. In this direction, binning is one of the possible solutions toward conditional validity.
+
+```{r}
+#' Compute conformal prediction interval
+binning_conformal <- function(x, y, x.test, y.test, alpha, nbins, view_plot=T){
+  
+  x_bins <- seq(0,1,length.out=nbins+1)
+  lowers <- list()
+  uppers <- list()
+  bins_x.test <- list()
+  bins_y.test <- list()
+  
+  coverages <- NULL
+  widths <- NULL
+  
+  for(j in 1:(length(x_bins)-1)){
+    binj <- as.logical((x>=x_bins[j])*(x<=x_bins[j+1]))
+    binj_test <- as.logical((x.test[,1]>=x_bins[j])*(x.test[,1]<=x_bins[j+1]))
+    
+    pi.conformal <- reg_split_conformal(x[binj], y[binj], x.test[binj_test,1], alpha)
+    lowers[[j]] <- pi.conformal$lower_bound
+    uppers[[j]] <- pi.conformal$upper_bound
+    bins_x.test[[j]] <- x.test[binj_test,1]
+    bins_y.test[[j]] <- y.test[binj_test]
+  }
+  
+  if(view_plot){
+    lower <- unlist(lowers)
+    upper <- unlist(uppers)
+    x.plot <- unlist(bins_x.test)
+    y.plot <- unlist(bins_y.test)
+    idx.sort <- sort(x.plot, index.return=TRUE)$ix
+    plot(x.plot[idx.sort], y.plot[idx.sort], col='lightblue', main=paste0("Binned PI, alpha=",alpha, ", nbins=",nbins),
+     xlab="x test", ylab="y test")
+    lines(x.plot[idx.sort], lower[idx.sort], lty=3, col='black', lwd=2)
+    lines(x.plot[idx.sort], upper[idx.sort], lty=3, col='black', lwd=2)
+  }
+  
+}
+
+# Nominal significance level
+alpha <- .1
+pi.conformal <- binning_conformal(x, y, x.test, y.test, alpha, nbins=3)
+```
+
+Note that having validity in each bin implies having global validity. And if we increased the number of bins
+
+```{r, out.width='\\textwidth', figure.align = "center", figure.height = 5}
+par(mfrow=c(2,3))
+for(nbins in 3:8){
+  pi.conformal <- binning_conformal(x, y, x.test, y.test, alpha, nbins=nbins)
+}
+```
+
+The bins cannot be too small. On the contrary, there is a trade-off between achieving conditional validity and having enough datapoints in each bin to well-calibrate local prediction intervals.
+
+On-going research on the topic concerns:
+* Locally adaptive split conformal methods
+* Conformalized Quantile Regression
+
+## Tutorial on ConformalInference package
+
+The `ConformalInference` R package allows you to automatically generate conformal prediction intervals - both in full and split conformal framework - from very complex regression model.
+
+```{r, message=FALSE, warning=FALSE}
+# devtools::install_github(repo="ryantibs/conformal", subdir="conformalInference")
+library(conformalInference)
+
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+load('nlr_data.rda')
+attach(Prestige)
+```
+
+The ConformalInference package has a "functional programming" soul, in the sense
+that one can "extract" the training and the prediction function of the considered model. The model must not be necessary linear. On the contrary, the package allows also to exploit non-linear prediction models.
+
+### Linear models
+```{r}
+lm_train=lm.funs(intercept = T)$train.fun
+lm_predict=lm.funs(intercept = T)$predict.fun
+```
+
+We'll see in a moment that these functions will be given as input to the command that will take care of constructing the PI.
+
+In order to exploit the package for automatically constructing conformal prediction intervals with a linear model as point predictor, what one needs to do is *define the model -- i.e., its design matrix*.
+
+**Multivariate linear regression model**
+
+For example, if we wanted to construct prediction intervals for forecasts made with a multivariate linear regression model:
+
+```{r}
+model_poly <- lm(prestige ~ poly(income,degree=2))
+
+# Define the design matrix of the model
+design_matrix <- matrix(poly(income,degree=2), ncol=2)
+
+# And evaluate all predictors over a grid
+income.grid <- seq(range(income)[1],range(income)[2],by=100)
+pred_grid <- matrix(poly(income.grid,degree=2,coefs=attr(poly(income,degree=2),"coefs")),ncol=2)
+```
+
+Then give the design matrix, the observed response variable and the predictors evaluated on a grid to the `conformal.pred` function, namely the function that builds the conformal PI.
+
+```{r, message=FALSE, warning=FALSE}
+c_preds <- conformal.pred(design_matrix, prestige, pred_grid, alpha=0.05, verbose=F, train.fun=lm_train, predict.fun=lm_predict, num.grid.pts = 200)
+
+plot(income, prestige, xlim=range(income.grid), cex =.5, col ="lightblue", main='Polynomial Regression')
+
+lines(income.grid, c_preds$pred, lwd=2, col ="black", lty=1)
+matlines(income.grid, cbind(c_preds$up,c_preds$lo), lwd=2, col="black",lty=2)
+```
+
+In order to compute the PI in a split conformal framework, one can use the `conformal.pred.split` function.
+
+```{r}
+c_preds_split <- conformal.pred.split(design_matrix, prestige, pred_grid, alpha=0.05, verbose=F, train.fun=lm_train, predict.fun=lm_predict)
+
+plot(income, prestige, xlim=range(income.grid), cex =.5, col ="lightblue", main='Polynomial Regression')
+
+lines(income.grid, c_preds_split$pred, lwd=2, col ="black", lty=1)
+matlines(income.grid, cbind(c_preds_split$up,c_preds_split$lo), lwd=2, col="black", lty=2)
+```
+
+Of course, beware that every execution of the `conformal.pred.split` function will build prediction intervals that differ in principle.
+
+More generally, whenever a point predictor can be formulated as a linear regression model, everything can be done in the same exact fashion. The only thing to pay attention to is the definition of the design matrix.
+
+**Splines**
+
+```{r}
+library(splines)
+breaks <- c(quantile(income, probs=c(0.2,0.4,0.6,0.8)), 15000)
+model_cut <- lm(prestige ~ bs(income, degree=3, knots=breaks))
+
+# Define the design matrix
+design_matrix <- bs(income, degree=3, knots=breaks)
+
+# And evaluate the predictors over a grid
+pred_grid=matrix(bs(income.grid, degree=3, knots=breaks), nrow=length(income.grid))
+```
+
+Then everything works just as before.
+
+```{r}
+c_preds <- conformal.pred(design_matrix, prestige, pred_grid, alpha=0.05, verbose=F, train.fun = lm_train, predict.fun=lm_predict, num.grid.pts=200)
+
+plot(income, prestige, xlim=range(income.grid), cex=.5, col ="lightblue", main='Spline Regression')
+lines(income.grid, c_preds$pred, lwd=2, col="black", lty=1)
+matlines(income.grid, cbind(c_preds$up,c_preds$lo), lwd=1, col="black", lty=2)
+```
+
+### Nonlinear models
+In a "nonlm" case, custom functions for the point predictor need to be created, In particular, we need to explicitly define the prediction model objects, which will be used to output predictions.
+
+**Smoothing splines**
+
+Let us first start with smoothing splines.
+
+```{r}
+fit <- smooth.spline(income, prestige)
+opt <- fit$df
+```
+
+Now define the function for training the point predictor and the function actually used for prediction.
+
+```{r}
+train_ss <- function(x, y, out=NULL){
+  smooth.spline(x, y, df=opt)
+}
+
+predict_ss <- function(obj, new_x){
+  predict(obj, new_x)$y
+}
+
+# Example of use
+# trained_pred <- train_ss(income, prestige)
+# predict_ss(trained_pred, income)
+```
+
+These ad-hoc functions can be given as input to the `conformal.pred` function:
+
+```{r}
+c_preds <- conformal.pred(income, prestige, income.grid, alpha=0.05, verbose=F, train.fun=train_ss, predict.fun=predict_ss, num.grid.pts=200)
+
+plot(income, prestige, cex =.5, col ="lightblue", main='Smoothing spline')
+lines(income.grid, c_preds$pred, lwd=2, col ="black", lty=1)
+matlines(income.grid, cbind(c_preds$up,c_preds$lo), lwd=2, col ="black", lty=2)
+```
+
+**GAMs**
+
+```{r}
+library(mgcv)
+model_gam <- gam(prestige ~ s(education, bs='cr') + s(income, bs='cr'))
+
+# Evaluate the predictors on a grid
+education.grid <- seq(range(education)[1], range(education)[2], length.out=100)
+income.grid <- seq(range(income)[1], range(income)[2], length.out=100)
+grid <- expand.grid(education.grid, income.grid)
+names(grid) <- c('education', 'income')
+pred <- predict(model_gam, newdata=grid)
+```
+
+```{r, webgl=T, message=FALSE}
+library(rgl)
+
+persp3d(education.grid, income.grid, pred, col='forestgreen')
+points3d(education, income, prestige, col='lightblue', size=5)
+```
+
+Again, we manually define the function to train the point predictor and the function used for prediction.
+
+```{r}
+train_gam <- function(x, y, out=NULL){
+  colnames(x) <- c('var1','var2')
+  train_data <- data.frame(y, x)
+  model_gam <- gam(y ~ s(var1, bs='cr') + s(var2, bs='cr'), data=train_data)
+}
+
+predict_gam <- function(obj, new_x){
+  new_x <- data.frame(new_x)
+  colnames(new_x) <- c('var1', 'var2')
+  predict.gam(obj, new_x)
+}
+```
+
+And we generate our predictions, just as before.
+
+```{r}
+c_preds <- conformal.pred(cbind(education,income), prestige, c(median(education),median(income)), alpha=0.05, verbose=F, train.fun=train_gam, predict.fun=predict_gam, num.grid.pts=200)
+
+c_preds_split <- conformal.pred.split(cbind(education,income), prestige, c(median(education),median(income)), alpha=0.05,verbose=F, train.fun=train_gam, predict.fun=predict_gam)
+```
+
+### Multivariate response
+
+The `conformalInference.multi` package plays the multivariate counterpart of `conformalInference`.
+
+```{r, message=FALSE, warning=FALSE}
+#install.packages('conformalInference.multi')
+library(conformalInference.multi)
+```
+
+Let's generate some multivariate data
+
+```{r}
+n=25
+p=4
+q=2
+
+mu=rep(0,p)
+x = mvtnorm::rmvnorm(n, mu)
+beta<-sapply(1:q, function(k) c(mvtnorm::rmvnorm(1,mu)))
+y = x%*%beta + t(mvtnorm::rmvnorm(q,1:(n)))
+x0=x[n,]
+y0=y[n,]
+
+n0<-nrow(y0)
+q<-ncol(y)
+```
+
+Let's declare the fitting and prediction function
+
+```{r}
+fun=mean_multi()
+
+```
+
+And then run the usual full conformal algorithm
+
+```{r}
+final.full <- conformal.multidim.full(x, y, x0, fun$train.fun,
+                                      fun$predict.fun, score="l2",
+                                      num.grid.pts.dim=100, grid.factor=1.25,
+                                      verbose=FALSE)
+
+plot_multidim(final.full)
+```
+
+
+I can customise the ncm, of course
+
+```{r}
+final.full <- conformal.multidim.full(x, y, x0, fun$train.fun,
+                                      fun$predict.fun, score="max",
+                                      num.grid.pts.dim=100, grid.factor=1.25,
+                                      verbose=FALSE)
+
+plot_multidim(final.full)
+```
